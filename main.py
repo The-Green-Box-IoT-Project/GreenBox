@@ -9,3 +9,5 @@ if __name__ == '__main__':
     setup_logger()
 
     logging.info("Environment setup complete")
+
+    print("prova")
