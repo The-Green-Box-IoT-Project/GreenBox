@@ -10,4 +10,4 @@ if __name__ == '__main__':
 
     logging.info("Environment setup complete")
 
-    print("prova")
+    # print("prova")
