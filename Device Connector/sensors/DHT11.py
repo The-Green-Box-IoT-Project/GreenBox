@@ -30,9 +30,9 @@ class DHT11:
         plt.tight_layout()
         plt.show()
 
-    def change_granularity(self, hours):
+    def change_granularity(self, minutes):
         df = correct_non_numeric_values(self.df)
-        self.df = resample_dataframe(df, hours)
+        self.df = resample_dataframe(df, minutes)
 
 
 if __name__ == '__main__':
