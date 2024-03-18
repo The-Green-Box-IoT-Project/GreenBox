@@ -1,4 +1,4 @@
-from modules.data_processor import *
+from ..modules.data_processor import *
 import matplotlib.pyplot as plt
 
 
