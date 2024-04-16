@@ -1,27 +1,41 @@
 import json
-import paho.mqtt.client as PahoMQTT
+import paho.mqtt.client as mqtt
 
 
 class MyMQTT:
-    def __init__(self, clientID, broker, port, notifier):
+    def __init__(self, clientID, broker, port):
         self.broker = broker
         self.port = port
-        self.notifier = notifier
+        self.notifier = self.notify
         self.clientID = clientID
         self._topic = ""
         self._isSubscriber = False
         # create an instance of paho.mqtt.client
-        self._paho_mqtt = PahoMQTT.Client(clientID, True)
+        self._paho_mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, clientID)
         # register the callback
         self._paho_mqtt.on_connect = self.myOnConnect
         self._paho_mqtt.on_message = self.myOnMessageReceived
 
-    def myOnConnect(self, paho_mqtt, userdata, flags, rc):
-        print("Connected to %s with result code: %d" % (self.broker, rc))
+    def notify(self, topic, payload):
+        print(f"Received message on topic '{topic}': {payload}")
 
-    def myOnMessageReceived(self, paho_mqtt, userdata, msg):
+    def myOnConnect(self, client, userdata, flags, reason_code, properties=None):
+        if hasattr(flags, 'session_present'):
+            session_present = flags.session_present
+        else:
+            session_present = flags.get("session present", False)
+
+        if session_present:
+            print("Session present.")
+
+        if reason_code == 0:
+            print("Connected to %s with success." % self.broker)
+        else:
+            print("Connection failed with reason code: %d" % reason_code)
+
+    def myOnMessageReceived(self, client, userdata, message):
         # A new message is received
-        self.notifier.notify(msg.topic, msg.payload)
+        self.notifier(message.topic, message.payload)
 
     def myPublish(self, topic, msg):
         # publish a message with a certain topic
