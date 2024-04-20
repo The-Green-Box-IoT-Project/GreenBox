@@ -1,5 +1,5 @@
 # Importa la classe MyMQTT
-from modules.MyMQTT import MyMQTT
+from Device_Connector.sensors.modules.MyMQTT import MyMQTT
 
 
 # Funzione per la gestione dei messaggi ricevuti

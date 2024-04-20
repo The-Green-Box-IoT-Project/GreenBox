@@ -1,4 +1,4 @@
-from ..modules.data_processor import *
+from Device_Connector.sensors.modules.data_processor import *
 import matplotlib.pyplot as plt
 
 
@@ -36,8 +36,6 @@ class DHT11:
 
 
 if __name__ == '__main__':
-    path = '../data/dataset/GreenhouseClimate.csv'
+    path = 'data/dataset/GreenhouseClimate.csv'
     sensor = DHT11(path)
-    sensor.change_granularity(1)
-    sensor.plot_dataframe()
     print(sensor.df)

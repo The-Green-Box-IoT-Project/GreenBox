@@ -1,8 +1,7 @@
-import pandas as pd
 import time
 import random
-from modules.data_processor import *
-from modules.MyMQTT import *
+from Device_Connector.sensors.modules.data_processor import *
+from Device_Connector.sensors.modules.MyMQTT import *
 
 
 # Funzione per generare dati casuali
@@ -42,7 +41,7 @@ try:
     sec = 0
     while True:
 
-        path = './data/dataset/GreenhouseClimate.csv'
+        path = 'sensors/data/dataset/GreenhouseClimate.csv'
         dataframe = read_sensor_data(path)
         data = data_correct_format(dataframe.iloc[sec])
 

@@ -37,8 +37,8 @@ class InfluxDBReader:
         self.query += f'\n  |> range(start: -{minutes}m)'
 
     def query_from_to_timestamp(self, start, end):
-        start_time = start.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_time = end.strftime('%Y-%m-%dT%H:%M:%SZ')
+        start_time = start.isoformat() + 'Z'
+        end_time = end.isoformat() + 'Z'
         self.query += f'\n  |> range(start: {start_time}, stop: {end_time})'
 
     def query_filter_measurement(self, measurement_name):
@@ -64,6 +64,30 @@ class InfluxDBReader:
         result = query_api.query(org=self.org, query=self.query)
         return result
 
+    def compose_query_last_minutes(
+            self, minutes, measurement_name, field_name,
+            host_name, topic_name, window_period,yield_name
+    ):
+        self.query_range(minutes)
+        self.query_filter_measurement(measurement_name)
+        self.query_filter_field(field_name)
+        self.query_host_filter(host_name)
+        self.query_topic_filter(topic_name)
+        self.query_aggregate_window(window_period)
+        self.query_yield(yield_name)
+
+    def compose_query_timestamps(
+            self, start_time, end_time, measurement_name, field_name,
+            host_name, topic_name, window_period,yield_name
+    ):
+        self.query_from_to_timestamp(start_time, end_time)
+        self.query_filter_measurement(measurement_name)
+        self.query_filter_field(field_name)
+        self.query_host_filter(host_name)
+        self.query_topic_filter(topic_name)
+        self.query_aggregate_window(window_period)
+        self.query_yield(yield_name)
+
 
 if __name__ == "__main__":
     # Creazione di un'istanza di InfluxDBReader
@@ -72,34 +96,26 @@ if __name__ == "__main__":
     # Definizione dei parametri per la query
     start_time = datetime.datetime(2024, 4, 16, 17, 27, 0)
     end_time = datetime.datetime(2024, 4, 16, 17, 36, 0)
+    last_minutes = 5
 
-    measurement_name = "mqtt_consumer"
-    field_name = "temperature"
-    host_name = "marzio-windows"
-    topic_name = "sensor/data"
-    window_period = "1m"
-    yield_name = "mean"
+    variables_dict = {
+        "measurement_name": "mqtt_consumer",
+        "field_name": "temperature",
+        "host_name": "marzio-windows",
+        "topic_name": "sensor/data",
+        "window_period": "1m",
+        "yield_name": "mean"
+    }
 
     # Composizione della query finale
-    # influxdb.query_from_to_timestamp(start_time, end_time)
-    influxdb.query_range(5)
-    influxdb.query_filter_measurement(measurement_name)
-    influxdb.query_filter_field(field_name)
-    influxdb.query_host_filter(host_name)
-    influxdb.query_topic_filter(topic_name)
-    influxdb.query_aggregate_window(window_period)
-    influxdb.query_yield(yield_name)
-
+    influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
+    # influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
     print(influxdb.query)
 
     # Esecuzione della query
     result = influxdb.execute_query()
 
     # Visualizzazione dei risultati
-    print(result)
-
     for table in result:
         for record in table:
             print((record.get_field(), record.get_value()))
-
-
