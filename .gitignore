@@ -1,2 +1,7 @@
 logs/
 .idea/
+/startinflux.bat
+/idbtoken.txt
+/telegraf.conf
+/.env
+/telegraf_start.bat
