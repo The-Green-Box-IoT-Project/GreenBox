@@ -9,26 +9,24 @@ token = os.getenv("INFLUX_TOKEN")
 bucket = os.getenv('INFLUXDB_BUCKET')
 org = os.getenv('INFLUXDB_ORG')
 url = os.getenv('INFLUXDB_URL')
-print(f"Token: {token}\tBucket: {bucket}\tOrg: {org}\tURL: {url}")
 
 
 class InfluxDBReader:
-
     def __init__(self, bucket, org, token, url):
         self.bucket = bucket
         self.org = org
         self.token = token
         self.url = url
-        self.client = self.connect_client()
-        self.query = self.query_instance()
+        self.client = None
+        self.query = None
+        self._result = None
 
     def connect_client(self):
-        client = influxdb_client.InfluxDBClient(
+        self.client = influxdb_client.InfluxDBClient(
             url=self.url,
             token=self.token,
             org=self.org
         )
-        return client
 
     def query_instance(self):
         query = f'from(bucket:"{self.bucket}")'
@@ -62,13 +60,23 @@ class InfluxDBReader:
 
     def execute_query(self):
         query_api = self.client.query_api()
-        result = query_api.query(org=self.org, query=self.query)
+        self._result = query_api.query(org=self.org, query=self.query)
+        self.query = None
+
+    def get_result(self):
+        result = {}
+        for table in self._result:
+            for record in table:
+                if record.get_field() not in result:
+                    result[record.get_field()] = {}
+                result[record.get_field()][record.get_time().isoformat()] = record.get_value()
         return result
 
     def compose_query_last_minutes(
             self, minutes, measurement_name, field_name,
-            host_name, topic_name, window_period,yield_name
+            host_name, topic_name, window_period, yield_name
     ):
+        self.query = self.query_instance()
         self.query_range(minutes)
         self.query_filter_measurement(measurement_name)
         self.query_filter_field(field_name)
@@ -79,8 +87,9 @@ class InfluxDBReader:
 
     def compose_query_timestamps(
             self, start_time, end_time, measurement_name, field_name,
-            host_name, topic_name, window_period,yield_name
+            host_name, topic_name, window_period, yield_name
     ):
+        self.query = self.query_instance()
         self.query_from_to_timestamp(start_time, end_time)
         self.query_filter_measurement(measurement_name)
         self.query_filter_field(field_name)
@@ -96,7 +105,7 @@ if __name__ == "__main__":
 
     # Definizione dei parametri per la query
     start_time = datetime.datetime(2024, 4, 16, 17, 27, 0)
-    end_time = datetime.datetime(2024, 4, 16, 17, 36, 0)
+    end_time = datetime.datetime(2024, 4, 24, 17, 36, 0)
     last_minutes = 5
 
     variables_dict = {
@@ -109,14 +118,11 @@ if __name__ == "__main__":
     }
 
     # Composizione della query finale
-    # influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
-    influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
+    influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
+    # influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
     print(influxdb.query)
 
     # Esecuzione della query
-    result = influxdb.execute_query()
-
-    # Visualizzazione dei risultati
-    for table in result:
-        for record in table:
-            print((record.get_field(), record.get_value()))
+    influxdb.execute_query()
+    result = influxdb.get_result()
+    print(result)
