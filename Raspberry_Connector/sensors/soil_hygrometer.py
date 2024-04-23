@@ -3,7 +3,7 @@ from Raspberry_Connector.sensors.sensor_emulator import *
 
 class GrodanSens(SensorEmulator):
 
-    FILE_PATH = './data/dataset/GrodanSens.csv'
+    FILE_PATH = './sensors/data/dataset/GrodanSens.csv'
 
     def __init__(self, path=FILE_PATH, seconds=1):
         super().__init__(path, seconds)
@@ -21,8 +21,3 @@ class GrodanSens(SensorEmulator):
         data = self.__select_soil_hum()
         data = self.correct_values(data)
         return data
-
-
-if __name__ == '__main__':
-    sensor = GrodanSens(seconds=3)
-    print(sensor.soil_humidity)

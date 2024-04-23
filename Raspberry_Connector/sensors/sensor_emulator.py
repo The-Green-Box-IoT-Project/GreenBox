@@ -47,7 +47,7 @@ class SensorEmulator:
                                                errors='coerce')  # errors='coerce' will convert non-numeric values to NaN
         return df
 
-    def __correct_csv_file(self):
+    def __correct_str_to_float(self):
         new_data = []
         with open(self.FILE_PATH, 'r') as file:
             reader = csv.reader(file)
@@ -60,6 +60,10 @@ class SensorEmulator:
         columns = new_data[0]
         data = new_data[1:]
         dataframe = pd.DataFrame(data, columns=columns)
+        return dataframe
+
+    def __correct_csv_file(self):
+        dataframe = self.__correct_str_to_float()
         dataframe = self.__correct_non_numeric_values(dataframe)
         return dataframe
 

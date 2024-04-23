@@ -3,13 +3,13 @@ from Raspberry_Connector.sensors.sensor_emulator import *
 
 class DHT11(SensorEmulator):
 
-    FILE_PATH = './data/dataset/GreenhouseClimate.csv'
+    FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
 
     def __init__(self, path=FILE_PATH, seconds=1):
         super().__init__(path, seconds)
         self.temperature, self.air_humidity = self.__correct_temp_and_hum_values()
-        self.topic_temperature = 'dht/temperature/data'
-        self.topic_air_humidity = 'dht/air_humidity/data'
+        self.topic_temperature = 'dht11/temperature/data'
+        self.topic_air_humidity = 'dht11/air_humidity/data'
 
     def __select_temp_and_hum(self):
         self.data.rename(columns={'Rhair': 'air_humidity', 'Tair': 'temperature'}, inplace=True)
@@ -22,9 +22,3 @@ class DHT11(SensorEmulator):
         temperature = self.correct_values(temperature)
         humidity = self.correct_values(humidity)
         return temperature, humidity
-
-
-if __name__ == '__main__':
-    sensor = DHT11(seconds=3)
-    print(sensor.temperature)
-    print(sensor.air_humidity)
