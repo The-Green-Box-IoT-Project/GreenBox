@@ -119,6 +119,7 @@ if __name__ == "__main__":
 
     influxdb.connect_client()
     # Composizione della query finale
+
     influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
     # influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
     print(influxdb.query)

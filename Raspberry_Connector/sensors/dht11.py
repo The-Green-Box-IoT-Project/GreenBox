@@ -3,6 +3,7 @@ from Raspberry_Connector.sensors.sensor_emulator import *
 
 class DHT11(SensorEmulator):
 
+<<<<<<< HEAD
     FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
 
     def __init__(self, conf, path=FILE_PATH, seconds=1):
@@ -20,6 +21,15 @@ class DHT11(SensorEmulator):
 
         # pd.Series
         self.temperature, self.air_humidity = self.__correct_temp_and_hum_values()
+=======
+    FILE_PATH = './data/dataset/GreenhouseClimate.csv'
+
+    def __init__(self, path=FILE_PATH, seconds=1):
+        super().__init__(path, seconds)
+        self.temperature, self.air_humidity = self.__correct_temp_and_hum_values()
+        self.topic_temperature = 'dht/temperature/data'
+        self.topic_air_humidity = 'dht/air_humidity/data'
+>>>>>>> 00ef6ca (Created DHT11 and Grodan sensors objects.)
 
     def __select_temp_and_hum(self):
         self.data.rename(columns={'Rhair': 'air_humidity', 'Tair': 'temperature'}, inplace=True)
@@ -32,3 +42,12 @@ class DHT11(SensorEmulator):
         temperature = self.correct_values(temperature)
         humidity = self.correct_values(humidity)
         return temperature, humidity
+<<<<<<< HEAD
+=======
+
+
+if __name__ == '__main__':
+    sensor = DHT11(seconds=3)
+    print(sensor.temperature)
+    print(sensor.air_humidity)
+>>>>>>> 00ef6ca (Created DHT11 and Grodan sensors objects.)
