@@ -111,7 +111,7 @@ if __name__ == "__main__":
     variables_dict = {
         "measurement_name": "mqtt_consumer",
         "field_name": "temperature",
-        "host_name": "MacBook-Pro-di-luca-2.local",
+        "host_name": "marzio-windows",
         "topic_name": "sensor/data",
         "window_period": "1m",
         "yield_name": "mean"
