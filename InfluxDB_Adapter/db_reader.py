@@ -9,7 +9,6 @@ token = os.getenv("INFLUX_TOKEN")
 bucket = os.getenv('INFLUXDB_BUCKET')
 org = os.getenv('INFLUXDB_ORG')
 url = os.getenv('INFLUXDB_URL')
-print(f"Token: {token}\tBucket: {bucket}\tOrg: {org}\tURL: {url}")
 
 
 class InfluxDBReader:
@@ -102,7 +101,7 @@ if __name__ == "__main__":
     variables_dict = {
         "measurement_name": "mqtt_consumer",
         "field_name": "temperature",
-        "host_name": "SteurendoPPC",
+        "host_name": "marzio-windows",
         "topic_name": "sensor/data",
         "window_period": "1m",
         "yield_name": "mean"
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     # Composizione della query finale
     # influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
     influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
-    print(influxdb.query)
+    # print(influxdb.query)+
 
     # Esecuzione della query
     result = influxdb.execute_query()
