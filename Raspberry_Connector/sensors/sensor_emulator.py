@@ -9,7 +9,6 @@ class SensorEmulator:
 
     FILE_PATH = ''
 
-<<<<<<< HEAD
     def __init__(self, conf, path, seconds):
 
         # To the dataset .csv file
@@ -27,11 +26,6 @@ class SensorEmulator:
         self.topic = conf['services_details'][0]['topic']
 
         # correctly read data from csv : return pd.Dataframe
-=======
-    def __init__(self, path, seconds):
-        self.path = path
-        self.seconds = seconds
->>>>>>> 00ef6ca (Created DHT11 and Grodan sensors objects.)
         self.data = self.__correct_csv_file()
 
     @staticmethod
@@ -67,11 +61,7 @@ class SensorEmulator:
                                                errors='coerce')  # errors='coerce' will convert non-numeric values to NaN
         return df
 
-<<<<<<< HEAD
     def __correct_str_to_float(self):
-=======
-    def __correct_csv_file(self):
->>>>>>> 00ef6ca (Created DHT11 and Grodan sensors objects.)
         new_data = []
         with open(self.FILE_PATH, 'r') as file:
             reader = csv.reader(file)
@@ -84,13 +74,10 @@ class SensorEmulator:
         columns = new_data[0]
         data = new_data[1:]
         dataframe = pd.DataFrame(data, columns=columns)
-<<<<<<< HEAD
         return dataframe
 
     def __correct_csv_file(self):
         dataframe = self.__correct_str_to_float()
-=======
->>>>>>> 00ef6ca (Created DHT11 and Grodan sensors objects.)
         dataframe = self.__correct_non_numeric_values(dataframe)
         return dataframe
 
