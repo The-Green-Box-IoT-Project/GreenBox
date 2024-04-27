@@ -28,34 +28,34 @@ class InfluxDBReader:
             org=self.org
         )
 
-    def query_instance(self):
+    def _query_instance(self):
         query = f'from(bucket:"{self.bucket}")'
         return query
 
-    def query_range(self, minutes):
+    def _query_range(self, minutes):
         self.query += f'\n  |> range(start: -{minutes}m)'
 
-    def query_from_to_timestamp(self, start, end):
+    def _query_from_to_timestamp(self, start, end):
         start_time = start.isoformat() + 'Z'
         end_time = end.isoformat() + 'Z'
         self.query += f'\n  |> range(start: {start_time}, stop: {end_time})'
 
-    def query_filter_measurement(self, measurement_name):
+    def _query_filter_measurement(self, measurement_name):
         self.query += f'\n  |> filter(fn: (r) => r["_measurement"] == "{measurement_name}")'
 
-    def query_filter_field(self, field_name):
+    def _query_filter_field(self, field_name):
         self.query += f'\n  |> filter(fn: (r) => r["_field"] == "{field_name}")'
 
-    def query_host_filter(self, host_name):
+    def _query_host_filter(self, host_name):
         self.query += f'\n  |> filter(fn: (r) => r["host"] == "{host_name}")'
 
-    def query_topic_filter(self, topic_name):
+    def _query_topic_filter(self, topic_name):
         self.query += f'\n  |> filter(fn: (r) => r["topic"] == "{topic_name}")'
 
-    def query_aggregate_window(self, window_period):
+    def _query_aggregate_window(self, window_period):
         self.query += f'\n  |> aggregateWindow(every: {window_period}, fn: mean, createEmpty: false)'
 
-    def query_yield(self, yield_name):
+    def _query_yield(self, yield_name):
         self.query += f'\n  |> yield(name: "{yield_name}")'
 
     def execute_query(self):
@@ -76,27 +76,27 @@ class InfluxDBReader:
             self, minutes, measurement_name, field_name,
             host_name, topic_name, window_period, yield_name
     ):
-        self.query = self.query_instance()
-        self.query_range(minutes)
-        self.query_filter_measurement(measurement_name)
-        self.query_filter_field(field_name)
-        self.query_host_filter(host_name)
-        self.query_topic_filter(topic_name)
-        self.query_aggregate_window(window_period)
-        self.query_yield(yield_name)
+        self.query = self._query_instance()
+        self._query_range(minutes)
+        self._query_filter_measurement(measurement_name)
+        self._query_filter_field(field_name)
+        self._query_host_filter(host_name)
+        self._query_topic_filter(topic_name)
+        self._query_aggregate_window(window_period)
+        self._query_yield(yield_name)
 
     def compose_query_timestamps(
             self, start_time, end_time, measurement_name, field_name,
             host_name, topic_name, window_period, yield_name
     ):
-        self.query = self.query_instance()
-        self.query_from_to_timestamp(start_time, end_time)
-        self.query_filter_measurement(measurement_name)
-        self.query_filter_field(field_name)
-        self.query_host_filter(host_name)
-        self.query_topic_filter(topic_name)
-        self.query_aggregate_window(window_period)
-        self.query_yield(yield_name)
+        self.query = self._query_instance()
+        self._query_from_to_timestamp(start_time, end_time)
+        self._query_filter_measurement(measurement_name)
+        self._query_filter_field(field_name)
+        self._query_host_filter(host_name)
+        self._query_topic_filter(topic_name)
+        self._query_aggregate_window(window_period)
+        self._query_yield(yield_name)
 
 
 if __name__ == "__main__":

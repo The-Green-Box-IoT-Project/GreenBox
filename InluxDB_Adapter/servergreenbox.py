@@ -20,8 +20,8 @@ class ServerGreenBox:
         self.influxdb: InfluxDBReader = influxdb
 
     def GET(self, *path, **query):
-        print(path, '\t', query)
-        # self.influxdb.token = query['token']
+        # print(path, '\t', query)
+        self.influxdb.token = query['token']
         self.influxdb.token = token
         self.influxdb.connect_client()
         variables_dict = {
@@ -32,8 +32,8 @@ class ServerGreenBox:
             "window_period": "1m",
             "yield_name": "mean"
         }
-        start_time = datetime.datetime(2024, 4, 16, 17, 27, 0)
-        end_time = datetime.datetime(2024, 4, 24, 17, 36, 0)
+        start_time = datetime.datetime(2024, 4, 24, 17, 27, 0)
+        end_time = datetime.datetime(2024, 4, 30, 17, 36, 0)
         self.influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
         self.influxdb.execute_query()
         result = self.influxdb.get_result()
