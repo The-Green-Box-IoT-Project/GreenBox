@@ -1,8 +1,8 @@
-import json
-from stats.db_reader import *
 import time
+import json
 import statistics
-
+from stats.db_reader import *
+from Device_Connector.sensors.modules.MyMQTT import MyMQTT
 
 def calculate_statistics(blocks):
     stats_list = []
@@ -22,13 +22,9 @@ def calculate_statistics(blocks):
             })
     return stats_list
 
-
-def consume_published_values():
+def consume_published_values(mqtt_client, topic):
     while True:
-        published_blocks = []
-
         influxdb = InfluxDBReader(bucket, org, token, url)
-
         measurement_name = "mqtt_consumer"
         field_name = "temperature"
         host_name = "MacBook-Pro-di-luca-2.local"
@@ -42,19 +38,26 @@ def consume_published_values():
             for record in table.records:
                 values_in_block.append(record.get_value())
 
-        published_blocks.append(values_in_block)
+        statistics_json = calculate_statistics([values_in_block])
 
-        statistics_json = calculate_statistics(published_blocks)
+        # Pubblica le statistiche su MQTT
+        mqtt_client.myPublish(topic, statistics_json)
 
-        # Converti i dati in formato JSON
-        json_data = json.dumps(statistics_json)
+        # Stampa le statistiche in console ogni 60 secondi
+        print("Published Statistics:", json.dumps(statistics_json, indent=4))
 
-        # Stampa il JSON
-        print("Statistics:", json_data)
-
-        # Wait for 5 minutes before querying again
-        time.sleep(300)
-
+        # Attendi 60 secondi prima di ripetere la query e la pubblicazione
+        time.sleep(60)
 
 if __name__ == "__main__":
-    consume_published_values()
+    clientID = "MyMQTTClient"
+    broker_address = "localhost"  # Cambia con l'indirizzo del tuo broker MQTT
+    broker_port = 1883
+    mqtt_client = MyMQTT(clientID, broker_address, broker_port)
+    mqtt_client.start()
+
+    try:
+        topic = "statistics"
+        consume_published_values(mqtt_client, topic)
+    finally:
+        mqtt_client.stop()
