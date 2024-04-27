@@ -48,5 +48,8 @@ if __name__ == '__main__':
         }
     }
     cherrypy.tree.mount(ServerGreenBox(InfluxDBReader(bucket, org, token, url)), '/', conf)
+
+    cherrypy.config.update({'server.socket_host': '0.0.0.0'})
+
     cherrypy.engine.start()
     cherrypy.engine.block()
