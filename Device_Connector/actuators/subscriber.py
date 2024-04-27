@@ -1,11 +1,13 @@
 import json
 import time
-from Device_Connector.sensors.modules.MyMQTT import MyMQTT
+from Raspberry_Connector.tools.my_mqtt import MyMQTT
+
 
 def handle_message(topic, payload):
     print("Received statistics from topic:", topic)
     statistics = json.loads(payload)
     print("Statistics:", json.dumps(statistics, indent=4))
+
 
 class MyMQTTExtended(MyMQTT):
     def notify(self, topic, payload):
@@ -13,6 +15,7 @@ class MyMQTTExtended(MyMQTT):
         decoded_payload = payload.decode()
         # Usa il gestore di messaggi personalizzato
         handle_message(topic, decoded_payload)
+
 
 # Configurazione del broker MQTT
 broker_address = "localhost"

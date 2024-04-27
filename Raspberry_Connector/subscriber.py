@@ -61,7 +61,7 @@ mqtt_subscriber.start()
 
 try:
     # Iscriviti al topic "statistics"
-    mqtt_subscriber.mySubscribe("GreenBox/d1/s1/temperature")
+    mqtt_subscriber.mySubscribe("statistics")
 
     print("Listening for data...")
     # Mantieni il programma in esecuzione per poter ricevere messaggi

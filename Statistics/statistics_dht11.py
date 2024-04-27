@@ -1,8 +1,9 @@
 import time
 import json
 import statistics
-from stats.db_reader import *
-from Device_Connector.sensors.modules.MyMQTT import MyMQTT
+from Statistics.db_reader import *
+from Raspberry_Connector.tools.my_mqtt import MyMQTT
+
 
 def calculate_statistics(blocks):
     stats_list = []
@@ -22,12 +23,13 @@ def calculate_statistics(blocks):
             })
     return stats_list
 
+
 def consume_published_values(mqtt_client, topic):
     while True:
         influxdb = InfluxDBReader(bucket, org, token, url)
         measurement_name = "mqtt_consumer"
         field_name = "temperature"
-        host_name = "MacBook-Pro-di-luca-2.local"
+        host_name = "marzio-windows"
         topic_name = "sensor/data"
 
         query = influxdb.query_last_five_minutes(measurement_name, field_name, host_name, topic_name)
@@ -48,6 +50,7 @@ def consume_published_values(mqtt_client, topic):
 
         # Attendi 60 secondi prima di ripetere la query e la pubblicazione
         time.sleep(60)
+
 
 if __name__ == "__main__":
     clientID = "MyMQTTClient"
