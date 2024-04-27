@@ -9,9 +9,23 @@ class SensorEmulator:
 
     FILE_PATH = ''
 
-    def __init__(self, path, seconds):
+    def __init__(self, conf, path, seconds):
+
+        # To the dataset .csv file
         self.path = path
+
+        # For generate the desired granularity of the data
         self.seconds = seconds
+
+        # sensor's info
+        self.name = conf['device_name']
+        self.id = conf['sensID']
+        self.pin = conf['pin']
+        self.measurement_type = conf['measurementType']
+        self.units = conf['units']
+        self.topic = conf['services_details'][0]['topic']
+
+        # correctly read data from csv : return pd.Dataframe
         self.data = self.__correct_csv_file()
 
     @staticmethod
