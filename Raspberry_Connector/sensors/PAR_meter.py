@@ -7,10 +7,11 @@ class PAR_meter(SensorEmulator):
     """
     FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
 
-    def __init__(self, path=FILE_PATH, seconds=1):
-        super().__init__(path, seconds)
+    def __init__(self, conf, path=FILE_PATH, seconds=1):
+        super().__init__(conf, path, seconds)
+
+        # pd.Series
         self.PAR = self.__correct_PAR_values()
-        self.topic_PAR = 'PARmeter/PAR/data'
 
     def __select_PAR(self):
         self.data.rename(columns={'Tot_PAR': 'PAR'}, inplace=True)

@@ -5,10 +5,11 @@ class PH_meter(SensorEmulator):
 
     FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
 
-    def __init__(self, path=FILE_PATH, seconds=1):
-        super().__init__(path, seconds)
+    def __init__(self, conf, path=FILE_PATH, seconds=1):
+        super().__init__(conf, path, seconds)
+
+        # pd.Series
         self.pH = self.__correct_pH_values()
-        self.topic_pH = 'pHmeter/pH/data'
 
     def __select_pH(self):
         self.data.rename(columns={'pH_drain_PC': 'pH'}, inplace=True)
