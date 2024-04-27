@@ -15,11 +15,6 @@ class MyMQTT:
         # register the callback
         self._paho_mqtt.on_connect = self.myOnConnect
         self._paho_mqtt.on_message = self.myOnMessageReceived
-        # Aggiungere la funzione di callback on_publish
-        self._paho_mqtt.on_publish = self.myOnPublish
-
-    def myOnPublish(self, client, userdata, mid):
-        print("Message successfully posted with ID:", mid)
 
     @staticmethod
     def notify(topic, payload):

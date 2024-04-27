@@ -12,6 +12,7 @@ bucket = os.getenv('INFLUXDB_BUCKET')
 org = os.getenv('INFLUXDB_ORG')
 url = os.getenv('INFLUXDB_URL')
 
+
 class InfluxDBReader:
 
     def __init__(self, bucket, org, token, url):
@@ -43,6 +44,7 @@ class InfluxDBReader:
         result = query_api.query(org=self.org, query=query)
         return result
 
+
 def publish_values(influxdb, measurement_name, field_name, host_name, topic_name):
     while True:
         query = influxdb.query_last_five_minutes(measurement_name, field_name, host_name, topic_name)
@@ -64,6 +66,7 @@ def publish_values(influxdb, measurement_name, field_name, host_name, topic_name
         # Wait for 5 minutes before querying again
         time.sleep(300)
 
+
 if __name__ == "__main__":
     # Creazione di un'istanza di InfluxDBReader
     influxdb = InfluxDBReader(bucket, org, token, url)
@@ -71,7 +74,7 @@ if __name__ == "__main__":
     # Definizione dei parametri per la query
     measurement_name = "mqtt_consumer"
     field_name = "temperature"
-    host_name = "MacBook-Pro-di-luca-2.local"
+    host_name = "marzio-windows"
     topic_name = "sensor/data"
 
     publish_values(influxdb, measurement_name, field_name, host_name, topic_name)
