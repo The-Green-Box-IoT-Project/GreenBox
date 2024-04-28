@@ -5,7 +5,6 @@ from sensors.PAR_meter import PAR_meter
 from Raspberry_Connector.tools.my_mqtt import *
 import time
 import json
-import sys
 
 
 class RaspberryConnector:
@@ -78,6 +77,7 @@ class RaspberryConnector:
             broker=self.broker_address,
             port=self.broker_port
         )
+        self.mqtt_client.start()
 
         # Subscription to MQTT topics
         # self.subscribe_to_topics()
@@ -98,17 +98,13 @@ class RaspberryConnector:
         try:
             index = 0
             while True:
-                # for measurement in self.list_of_last_measurement:
-                # print(self.list_of_last_measurement)
-                # measurement = self.list_of_last_measurement[0]
-                # print(measurement)
-                # data = list(measurement["data_json"].values())[index]
-                # print(data)
-                measurement = {self.dht11.temperature.name: self.dht11.temperature.iloc[index]}
-                self.mqtt_client.myPublish("GreenBox/d1/s1/temperature", measurement)
-                time.sleep(self.seconds)
-                index += 1
-                # self.list_of_last_measurement.clear()
+                for measurement in self.list_of_last_measurement:
+                    field = list(measurement["data_json"].keys())[0]
+                    value = list(measurement["data_json"].values())[0][index]
+                    data = {field: value}
+                    self.mqtt_client.myPublish(measurement["topic"], data)
+                    time.sleep(self.seconds)
+                    index += 1
 
         except KeyboardInterrupt:
             print("Stopping publisher...")
@@ -118,5 +114,4 @@ class RaspberryConnector:
 
 if __name__ == "__main__":
     rc = RaspberryConnector(conf_path="conf.json", devices_path="devices.json", seconds=3)
-    print(rc.dht11.temperature)
-    print(rc.dht11.topic_temperature)
+    rc.publish_last_measurements()
