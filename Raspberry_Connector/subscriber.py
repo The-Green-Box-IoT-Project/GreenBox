@@ -35,9 +35,9 @@ import json
 
 
 def handle_message(topic, payload):
-    print("Received statistics from topic:", topic)
+    print("Received message from topic:", topic)
     statistics = json.loads(payload)
-    print("Temperature:", json.dumps(statistics, indent=4))
+    print("Message:", json.dumps(statistics, indent=4))
 
 
 class MyMQTTExtended(MyMQTT):
@@ -61,7 +61,7 @@ mqtt_subscriber.start()
 
 try:
     # Iscriviti al topic "statistics"
-    mqtt_subscriber.mySubscribe("statistics")
+    mqtt_subscriber.mySubscribe("sensor/data")
 
     print("Listening for data...")
     # Mantieni il programma in esecuzione per poter ricevere messaggi
