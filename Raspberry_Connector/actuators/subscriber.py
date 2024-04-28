@@ -39,4 +39,8 @@ try:
 
 except KeyboardInterrupt:
     print("Stopping subscriber...")
+<<<<<<< HEAD
     mqtt_subscriber.stop()
+=======
+    mqtt_subscriber.stop()
+>>>>>>> 46fad747ff2b5dce0d10e6cf7da61ba4b2220740

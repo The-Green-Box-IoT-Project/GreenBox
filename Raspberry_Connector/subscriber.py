@@ -60,7 +60,6 @@ mqtt_subscriber = MyMQTTExtended(client_id, broker_address, broker_port)
 mqtt_subscriber.start()
 
 try:
-
     # Iscriviti al topic "statistics"
     mqtt_subscriber.mySubscribe("statistics")
 

@@ -32,9 +32,3 @@ class DHT11(SensorEmulator):
         temperature = self.correct_values(temperature)
         humidity = self.correct_values(humidity)
         return temperature, humidity
-
-
-if __name__ == '__main__':
-    sensor = DHT11(seconds=3)
-    print(sensor.temperature)
-    print(sensor.air_humidity)

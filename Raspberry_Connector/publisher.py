@@ -10,7 +10,6 @@ def generate_random_data():
     humidity = random.uniform(40, 60)
     return {"temperature": temperature, "humidity": humidity}
 
-
 # def read_sensor_data(path):
 #     data = pd.read_csv(path)
 #     df = dht11_sensor(data)

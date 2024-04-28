@@ -22,8 +22,3 @@ class GrodanSens(SensorEmulator):
         data = self.__select_soil_hum()
         data = self.correct_values(data)
         return data
-
-
-if __name__ == '__main__':
-    sensor = GrodanSens(seconds=3)
-    print(sensor.soil_humidity)
