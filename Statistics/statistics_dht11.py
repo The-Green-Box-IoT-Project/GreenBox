@@ -1,8 +1,6 @@
-import time
-import json
 import statistics
 from Statistics.db_reader import *
-from Raspberry_Connector.tools.my_mqtt import MyMQTT
+from Statistics.tools.my_mqtt import MyMQTT
 
 
 def calculate_statistics(blocks):
