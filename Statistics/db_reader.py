@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # Definizione dei parametri per la query
     measurement_name = "mqtt_consumer"
     field_name = "temperature"
-    host_name = "marzio-windows"
+    host_name = "MBP-di-luca-2.lan"
     topic_name = "sensor/data"
 
     publish_values(influxdb, measurement_name, field_name, host_name, topic_name)
