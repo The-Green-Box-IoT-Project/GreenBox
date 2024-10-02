@@ -10,19 +10,6 @@ def generate_random_data():
     humidity = random.uniform(40, 60)
     return {"temperature": temperature, "humidity": humidity}
 
-# def read_sensor_data(path):
-#     data = pd.read_csv(path)
-#     df = dht11_sensor(data)
-#     df = correct_non_numeric_values(df)
-#     df = resample_dataframe(df, 6)
-#     return df
-#
-#
-# def data_correct_format(row):
-#     temperature = row['temperature']
-#     humidity = row['humidity']
-#     return {"temperature": temperature, "humidity": humidity}
-
 
 # Configurazione del broker MQTT
 broker_address = "localhost"
@@ -40,8 +27,6 @@ try:
     sec = 0
     while True:
 
-        # path = 'sensors/data/dataset/GreenhouseClimate.csv'
-        # dataframe = read_sensor_data(path)
         data = generate_random_data()
 
         # Invia i dati al topic "sensor/data"

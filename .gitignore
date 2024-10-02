@@ -5,3 +5,4 @@ logs/
 /telegraf.conf
 /.env
 /telegraf_start.bat
+*.pyc
