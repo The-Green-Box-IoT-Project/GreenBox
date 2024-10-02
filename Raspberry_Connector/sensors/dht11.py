@@ -5,7 +5,7 @@ class DHT11(SensorEmulator):
 
     FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
 
-    def __init__(self, conf, path=FILE_PATH, seconds=1):
+    def __init__(self, conf, path=FILE_PATH, seconds=3):
         super().__init__(conf, path, seconds)
 
         # Update specific info
@@ -13,10 +13,8 @@ class DHT11(SensorEmulator):
         self.topic_air_humidity = self.topic[1]
         self.unit_temperature = self.units[0]
         self.unit_air_humidity = self.units[1]
-
-        # No more needed
-        del self.topic
-        del self.units
+        self.field_temp = self.field[0]
+        self.field_air_humidity = self.field[1]
 
         # pd.Series
         self.temperature, self.air_humidity = self.__correct_temp_and_hum_values()
@@ -32,3 +30,29 @@ class DHT11(SensorEmulator):
         temperature = self.correct_values(temperature)
         humidity = self.correct_values(humidity)
         return temperature, humidity
+
+
+class TempSensor(DHT11):
+
+    FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
+
+    def __init__(self, conf, path=FILE_PATH, seconds=3):
+        super().__init__(conf, path, seconds)
+
+        self.value = self.temperature
+        self.topic = self.topic_temperature
+        self.field = self.field_temp
+        self.units = self.unit_temperature
+
+
+class AirHumSensor(DHT11):
+
+    FILE_PATH = './sensors/data/dataset/GreenhouseClimate.csv'
+
+    def __init__(self, conf, path=FILE_PATH, seconds=3):
+        super().__init__(conf, path, seconds)
+
+        self.value = self.air_humidity
+        self.topic = self.topic_air_humidity
+        self.field = self.field_air_humidity
+        self.units = self.unit_air_humidity

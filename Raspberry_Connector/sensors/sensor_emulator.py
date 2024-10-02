@@ -21,9 +21,18 @@ class SensorEmulator:
         self.name = conf['device_name']
         self.id = conf['sensID']
         self.pin = conf['pin']
-        self.measurement_type = conf['measurementType']
+        self.field = conf['measurementType']
         self.units = conf['units']
         self.topic = conf['services_details'][0]['topic']
+
+        # sensor measurement
+        # meas = {
+        #     "topic": self.topic,
+        #     "data": {
+        #         "field": self.field,
+        #         "value": self.value.iloc[count]
+        #     }
+        # }
 
         # correctly read data from csv : return pd.Dataframe
         self.data = self.__correct_csv_file()

@@ -5,11 +5,11 @@ class GrodanSens(SensorEmulator):
 
     FILE_PATH = './sensors/data/dataset/GrodanSens.csv'
 
-    def __init__(self, conf, path=FILE_PATH, seconds=1):
+    def __init__(self, conf, path=FILE_PATH, seconds=15):
         super().__init__(conf, path, seconds)
 
         # pd.Series
-        self.soil_humidity = self.__correct_soil_hum_values()
+        self.value = self.__correct_soil_hum_values()
 
     def __select_soil_hum(self):
         wc_slab1 = self.data['WC_slab1']
