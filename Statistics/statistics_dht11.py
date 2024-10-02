@@ -27,7 +27,7 @@ def consume_published_values(mqtt_client, topic):
         influxdb = InfluxDBReader(bucket, org, token, url)
         measurement_name = "mqtt_consumer"
         field_name = "temperature"
-        host_name = "marzio-windows"
+        host_name = "MBP-di-luca-2.lan"
         topic_name = "sensor/data"
 
         query = influxdb.query_last_five_minutes(measurement_name, field_name, host_name, topic_name)
