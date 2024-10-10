@@ -10,7 +10,7 @@ class CustomSubscriber:
         self.broker = broker
 
         # client initialization
-        self._mqtt = mqtt.Client(client_id=client_id, clean_session=True)
+        self._mqtt = mqtt.Client(client_id=client_id, clean_session=False)
         # registering callbacks
         self._mqtt.on_connect = self.on_connect
 
@@ -25,7 +25,7 @@ class CustomSubscriber:
         self._mqtt.disconnect()
 
     def on_connect(self, client, userdata, flags, rc):
-        logging.debug('Client "%s" connected to broker "%s" with result code: %d' % (client, self.broker, rc))
+        logging.debug('Connected to the broker with result code: %d' % rc)
 
     def on_message(self, client, userdata, msg):
-        print('Client "%s" received message on topic "TODO": %s' % msg.payload)
+        logging.debug('Received message: %s' % msg.payload)
