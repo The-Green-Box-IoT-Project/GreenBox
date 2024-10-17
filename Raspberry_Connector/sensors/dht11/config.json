@@ -1,0 +1,17 @@
+{
+  "device_id": "dht11",
+  "device_name": "DHT11",
+  "pin": 1,
+  "measurements": [
+    {
+      "name": "Temperature",
+      "unit": "Cel",
+      "topic": "temperature"
+    },
+    {
+      "name": "Humidity",
+      "unit": "%",
+      "topic": "humidity"
+    }
+  ]
+}
