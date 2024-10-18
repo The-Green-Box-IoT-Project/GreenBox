@@ -4,18 +4,19 @@ import paho.mqtt.client as mqtt
 
 
 class CustomSubscriber:
-    def __init__(self, client_id, topics, broker):
+    def __init__(self, client_id, topics, broker='mqtt.eclipseprojects.io', port=1883):
         self.client_id = client_id
         self.topics = topics
         self.broker = broker
+        self.port = port
 
         # client initialization
         self._mqtt = mqtt.Client(client_id=client_id, clean_session=False)
         # registering callbacks
         self._mqtt.on_connect = self.on_connect
 
-    def start(self, qos=0):
-        self._mqtt.connect(self.broker, port=1883)
+    def start(self, qos=2):
+        self._mqtt.connect(self.broker, port=self.port)
         self._mqtt.loop_start()
         self._mqtt.subscribe(self.topics, qos=qos)
 
