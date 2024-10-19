@@ -23,5 +23,6 @@ if __name__ == '__main__':
     parent_topic = raspberry.build_parent_topic(device_id)
     sensor_dht11 = DHT11(broker_ip=broker_ip, broker_port=broker_port, parent_topic=parent_topic)
     while True:
+        print(broker_ip, ':', broker_port)
         sensor_dht11.read_value()
         sleep(1)
