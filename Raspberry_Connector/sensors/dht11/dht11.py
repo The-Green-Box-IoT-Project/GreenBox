@@ -1,19 +1,17 @@
 import logging
 from pathlib import Path
 
-from Raspberry_Connector.sensors import sensors_interface
 from Raspberry_Connector import raspberry
+from Raspberry_Connector.sensors.sensor import Sensor
 from utils.custom_publisher import CustomPublisher
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 
 
-class DHT11:
+class DHT11(Sensor):
     def __init__(self, broker_ip, broker_port, parent_topic):
-        super().__init__()
-        self.device_id, self.device_name, self.device_pin, measurements = sensors_interface.retrieve_sensor(CONFIG_FILE)
-        self.measurements = measurements
+        super().__init__(CONFIG_FILE)
         topic_temperature, topic_humidity = self._build_topics(parent_topic)
         logging.debug('Creating DHT11 publisher for temperature: %s' % topic_temperature)
         self.publisher_temperature = CustomPublisher(client_id=self.device_id, topic=topic_temperature,
@@ -22,8 +20,8 @@ class DHT11:
         self.publisher_humidity = CustomPublisher(client_id=self.device_id, topic=topic_humidity, broker=broker_ip,
                                                   port=broker_port)
 
-    def _build_topics(self, parent_topic):
-        return (f"""{parent_topic}/{self.device_id}/{m['topic']}""" for m in self.measurements)
+    def read_value(self):
+        print('read')
 
 
 if __name__ == '__main__':
