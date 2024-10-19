@@ -11,7 +11,7 @@ class CustomPublisher:
         self.port = port
 
         # client initialization
-        self._mqtt = mqtt.Client(client_id=client_id, clean_session=False)
+        self._mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id, clean_session=False)
         # registering callbacks
         self._mqtt.on_connect = self.on_connect
 
