@@ -40,8 +40,8 @@ class SensorEmulator:
     @staticmethod
     def __change_time_reference(data):
         num_rows = len(data)
-        start_datetime = datetime(2023, 2, 1, 0, 0, 0)
-        index = pd.date_range(start=start_datetime, periods=num_rows, freq=f'5T')
+        start_datetime = datetime(2024, 1, 1, 0, 0, 0)
+        index = pd.date_range(start=start_datetime, periods=num_rows, freq=f'6T')
         data.index = index
         data.drop(columns=['%time'], axis=1, inplace=True)
         return data
@@ -91,7 +91,7 @@ class SensorEmulator:
         return dataframe
 
     def __resample_dataframe(self, data):
-        data = data.resample(f"{self.seconds}s").mean().interpolate(method='cubic')
+        data = data.resample(f"{self.seconds}s").mean().interpolate(method='linear')
         return data
 
     def __change_granularity(self, data):
