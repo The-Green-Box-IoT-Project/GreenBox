@@ -2,6 +2,7 @@ from time import sleep
 
 from Raspberry_Connector.sensors.dht11.dht11 import DHT11
 from Raspberry_Connector import raspberry
+from Raspberry_Connector.sensors.sensor_simulator import *
 
 
 class DHT11sim(DHT11):
@@ -9,8 +10,12 @@ class DHT11sim(DHT11):
         super().__init__(broker_ip, broker_port, parent_topic)
 
     def read_value(self):
-        print('culo')
-        pass
+        df_temperature = TempSensor_sim().value
+        df_air_humidity = AirHumSensor_sim().value
+        temp = SensorSimulator.read_current_value(df_temperature)
+        air_humidity = SensorSimulator.read_current_value(df_air_humidity)
+        print(temp)
+        print(air_humidity)
 
 
 if __name__ == '__main__':
