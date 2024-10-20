@@ -20,13 +20,12 @@ class DHT11(Sensor):
         self.publisher_humidity = CustomPublisher(client_id=self.device_id, topic=topic_humidity, broker=broker_ip,
                                                   port=broker_port)
 
+    def start(self):
+        self.publisher_temperature.start()
+
+    def stop(self):
+        self.publisher_temperature.stop()
+
     def read_value(self):
+        self.publisher_temperature.publish('read')
         print('read')
-
-
-if __name__ == '__main__':
-    device_id, device_name = raspberry.retrieve_device()
-    catalog_ip, catalog_port = raspberry.retrieve_catalog()
-    broker_ip, broker_port = raspberry.retrieve_broker(catalog_ip, catalog_port)
-    parent_topic = raspberry.build_parent_topic(device_id)
-    sensor_dht11 = DHT11(broker_ip=broker_ip, broker_port=broker_port, parent_topic=parent_topic)

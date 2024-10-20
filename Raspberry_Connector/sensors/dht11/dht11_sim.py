@@ -9,6 +9,7 @@ class DHT11sim(DHT11):
         super().__init__(broker_ip, broker_port, parent_topic)
 
     def read_value(self):
+        self.publisher_temperature.publish('culino')
         print('culo')
         pass
 
@@ -20,8 +21,10 @@ if __name__ == '__main__':
     device_id, device_name = raspberry.retrieve_device()
     catalog_ip, catalog_port = raspberry.retrieve_catalog()
     broker_ip, broker_port = raspberry.retrieve_broker(catalog_ip, catalog_port)
+    print('Broker IP: ', broker_ip)
     parent_topic = raspberry.build_parent_topic(device_id)
     sensor_dht11 = DHT11(broker_ip=broker_ip, broker_port=broker_port, parent_topic=parent_topic)
+    sensor_dht11.start()
     while True:
         print(broker_ip, ':', broker_port)
         sensor_dht11.read_value()

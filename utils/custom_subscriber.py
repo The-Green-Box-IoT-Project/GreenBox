@@ -1,4 +1,5 @@
 import logging
+from time import sleep
 
 import paho.mqtt.client as mqtt
 
@@ -14,6 +15,7 @@ class CustomSubscriber:
         self._mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id, clean_session=False)
         # registering callbacks
         self._mqtt.on_connect = self.on_connect
+        self._mqtt.on_message = self.on_message
 
     def start(self, qos=2):
         self._mqtt.connect(self.broker, port=self.port)
@@ -30,3 +32,11 @@ class CustomSubscriber:
 
     def on_message(self, client, userdata, msg):
         logging.debug('Received message: %s' % msg.payload)
+
+
+if __name__ == '__main__':
+    sub = CustomSubscriber(client_id='teeest',
+                           topics='/01f20b9e-6df4-43df-9fd6-c1376bb2ba41/greenhouse1/rb01/dht11/temperature')
+    sub.start()
+    while True:
+        sleep(1)
