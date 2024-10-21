@@ -1,11 +1,16 @@
 import json
+import os
+from pathlib import Path
 
 import requests
-from pathlib import Path
+from dotenv import load_dotenv
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 CATALOG_FILE = P / 'catalog.json'
+
+load_dotenv()
+greenbox_uuid = os.getenv('GREENBOX_UUID')
 
 
 def retrieve_catalog():
@@ -31,9 +36,6 @@ def retrieve_broker(catalog_ip, catalog_port):
     broker_port = broker_data['broker_port']
     return broker_ip, int(broker_port)
 
+
 def build_parent_topic(device_id):
-    return f"""/greenhouse1/{device_id}"""
-
-
-if __name__ == '__main__':
-    pass
+    return f"""/{greenbox_uuid}/greenhouse1/{device_id}"""
