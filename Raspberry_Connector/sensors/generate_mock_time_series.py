@@ -1,4 +1,3 @@
-import os
 import json
 import time
 import pandas as pd
@@ -9,7 +8,7 @@ from mockseries.seasonality import YearlySeasonality, DailySeasonality
 from mockseries.noise import RedNoise
 from mockseries.utils import datetime_range
 
-from Raspberry_Connector.tools import get_latest_entry_before_now
+from Raspberry_Connector.tools import get_latest_entry_before_now, convert_str_to_datetime
 
 
 class Sensor:
@@ -67,26 +66,39 @@ class MockTimeSeriesWrapper:
 
 
 class TimeSeriesGenerator:
-    def __init__(self, sensor: Sensor, measurement):
+    def __init__(self, sensor: Sensor, measurement, start_date: str = "2024-01-01", end_date: str = "2025-01-01"):
+        # Convert start and end dates only if provided, else set to None
+        self.start_date, self.end_date = (
+            convert_str_to_datetime(start_date, end_date) if start_date and end_date else (None, None)
+        )
         self.sensor = sensor
         self.measurement = [measurement] if isinstance(measurement, str) else measurement
 
-    def generate_current_time_series(self):
-        # Generate a time series for today only
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow = today + timedelta(days=1)
+    def _generate_time_series(self, start_date=None, end_date=None):
+        # Use provided dates or default to today's date range
+        if start_date is None or end_date is None:
+            start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=1)
+
         all_series = {}
         for measure_name in self.measurement:
             measure = self.sensor.measures[measure_name]
-            wrapper = MockTimeSeriesWrapper(measure, today, tomorrow)
+            wrapper = MockTimeSeriesWrapper(measure, start_date, end_date)
             timeseries = wrapper.generate_full_timeseries()
             all_series[measure_name] = timeseries.generate(wrapper.ts_index)
-        df = pd.DataFrame(data=all_series, index=wrapper.ts_index)
-        return df
+        return pd.DataFrame(data=all_series, index=wrapper.ts_index)
+
+    def _generate_current_time_series(self):
+        # Calls generate_time_series with today’s date
+        return self._generate_time_series()
+
+    def generate_interval_time_series(self):
+        # Calls generate_time_series with initialized start and end dates
+        return self._generate_time_series(self.start_date, self.end_date)
 
     def read_last_measurement(self):
         # Generate today's time series and find the last measurement within the past hour
-        df = self.generate_current_time_series().copy()
+        df = self._generate_current_time_series()
         last_entry_index = get_latest_entry_before_now(df)
         curr_df = df.loc[last_entry_index:last_entry_index + timedelta(hours=1)].apply(pd.to_numeric, errors='coerce')
 
@@ -95,11 +107,11 @@ class TimeSeriesGenerator:
         last_entry_index = get_latest_entry_before_now(df_resampled)
         return df_resampled.loc[last_entry_index]
 
+
 if __name__ == "__main__":
     t0 = time.time()
     load_dotenv()
-    sensor_file = os.path.join(os.getenv("MOCK_MEASUREMENTS"), "mock_values.json")
-    sensor = Sensor(sensor_file)
+    sensor = Sensor(r".\dht11\mock_values.json")
     dht11 = TimeSeriesGenerator(sensor, ["temperature", "humidity"])
-    print(dht11.read_last_measurement())
+    print(dht11.generate_interval_time_series())
     print(time.time()-t0)

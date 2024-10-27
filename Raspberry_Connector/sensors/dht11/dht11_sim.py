@@ -1,5 +1,4 @@
 from time import sleep
-import os
 from dotenv import load_dotenv
 
 from Raspberry_Connector.sensors.dht11.dht11 import DHT11
@@ -13,7 +12,6 @@ class DHT11sim(DHT11):
 
     def read_value(self):
         load_dotenv()
-        # sensor_file = os.path.join(os.getenv("MOCK_MEASUREMENTS"), "dht11.json")
         sensor = Sensor("mock_values.json")
         dht11 = TimeSeriesGenerator(sensor, ["temperature", "humidity"])
         temp = dht11.read_last_measurement()["temperature"]
