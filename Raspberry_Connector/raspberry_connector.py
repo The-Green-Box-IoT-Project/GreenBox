@@ -22,18 +22,18 @@ class RaspberryConnector:
         # Instantiate sensors' objects
         for sensor in self.devices_info["resources"]["sensors"]:
             if sensor["device_name"] == "DHT11":
-                self.temp_sens = TempSensor(sensor)
-                self.air_hum_sens = AirHumSensor(sensor)
+                self.temp_sens = TempSensor(sensor)  # questo
+                self.air_hum_sens = AirHumSensor(sensor)  # questo
                 self.sensors_list.append(self.temp_sens)
                 self.sensors_list.append(self.air_hum_sens)
             elif sensor["device_name"] == "pH_meter":
-                self.pH_meter = PH_meter(sensor)
+                self.pH_meter = PH_meter(sensor)  #questo
                 self.sensors_list.append(self.pH_meter)
             elif sensor["device_name"] == "PAR_meter":
-                self.PAR_meter = PAR_meter(sensor)
+                self.PAR_meter = PAR_meter(sensor)  #questo
                 self.sensors_list.append(self.PAR_meter)
             elif sensor["device_name"] == "Grodan":
-                self.grodan = GrodanSens(sensor)
+                self.grodan = GrodanSens(sensor)  #questo
                 self.sensors_list.append(self.grodan)
 
         # Instantiate actuator's object

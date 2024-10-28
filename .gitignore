@@ -6,3 +6,6 @@ logs/
 /.env
 /telegraf_start.bat
 *.pyc
+/mock_data_final.json
+
+
