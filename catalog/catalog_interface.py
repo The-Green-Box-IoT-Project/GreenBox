@@ -4,7 +4,10 @@ from pathlib import Path
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
+USERS_FILE = P / 'users.json'
 SESSIONS_FILE = P / 'sessions.json'
+SERVICES_FILE = P / 'services.json'
+RESOURCES_FILE = P / 'resources.json'
 
 
 def retrieve_endpoint():
@@ -24,9 +27,9 @@ def retrieve_broker():
 
 
 def validate_login(username, password):
-    with open('users.json', 'r') as f:
+    with open(USERS_FILE, 'r') as f:
         users = json.load(f)
-    if not users.has_key(username):
+    if username not in users:
         return None
     if not users[username]['password'] == password:
         return None
@@ -37,8 +40,8 @@ def _generate_token(username, password):
     with open(SESSIONS_FILE, 'r') as f:
         sessions = json.load(f)
     while True:
-        token = uuid.uuid4()
-        if not sessions.has_key(token):
+        token = str(uuid.uuid4())
+        if token not in sessions:
             break
     sessions[token] = {'username': username, 'password': password}
     with open(SESSIONS_FILE, 'w') as f:
@@ -51,6 +54,6 @@ def validate_token(token):
         return False
     with open(SESSIONS_FILE, 'r') as f:
         sessions = json.load(f)
-        if sessions.has_key(token):
+        if token in sessions:
             return True
     return False
