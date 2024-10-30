@@ -1,6 +1,7 @@
 import cherrypy
 
 import catalog_interface
+from catalog.catalog_interface import validate_login, validate_token
 from catalog_dispatcher import CatalogRequest
 
 
@@ -13,6 +14,8 @@ class CatalogGetResolver:
                 raise cherrypy.HTTPError(status=404)
             case CatalogRequest.RETRIEVE_BROKER:
                 response = CatalogGetResolver._retrieve_broker()
+            case CatalogRequest.LOGIN:
+                response = CatalogGetResolver._login()
         return response
 
     @staticmethod
@@ -23,6 +26,16 @@ class CatalogGetResolver:
             'broker_port': broker_port
         }
         return response
+
+    @staticmethod
+    def _login():
+        if not cherrypy.sessions.has_key('token'):
+            username = cherrypy.sessions['username']
+            password = cherrypy.sessions['password']
+            token = validate_login(username, password)
+        else:
+            token = cherrypy.sessions['token']
+        return token, validate_token(token)
 
 
 class CatalogPostResolver:
