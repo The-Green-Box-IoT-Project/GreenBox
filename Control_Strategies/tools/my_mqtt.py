@@ -3,9 +3,10 @@ import paho.mqtt.client as mqtt
 
 
 class MyMQTT:
-    def __init__(self, clientID, broker, port):
+    def __init__(self, clientID, broker, port, notifier=None):
         self.broker = broker
         self.port = port
+        self.notifier = notifier if notifier else self.notify  # Usa notifier passato o il metodo notify di default
         self.notifier = self.notify
         self.clientID = clientID
         self._topic = ""

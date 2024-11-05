@@ -2,6 +2,7 @@ import os
 import influxdb_client
 import json
 from dotenv import load_dotenv
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
@@ -19,6 +20,7 @@ class InfluxDBAdaptor:
         self.token = token
         self.url = url
         self.client = self.connect_client()
+        self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
 
     def connect_client(self):
         # Connessione a InfluxDB
@@ -60,3 +62,25 @@ class InfluxDBAdaptor:
         # Converti i dati in JSON
         json_data = json.dumps(values_to_publish)
         return json_data
+
+    def write_data(self, measurement_name, tags, fields, timestamp=None):
+        """Scrivi i dati su InfluxDB"""
+        point = influxdb_client.Point(measurement_name)
+
+        # Aggiungi i tag
+        for tag_key, tag_value in tags.items():
+            point = point.tag(tag_key, tag_value)
+
+        # Aggiungi i campi
+        for field_key, field_value in fields.items():
+            point = point.field(field_key, field_value)
+
+        # Imposta il timestamp, se fornito
+        if timestamp:
+            point = point.time(timestamp, write_precision='ms')  # specifica la precisione in millisecondi
+
+        try:
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            print("Dati scritti su InfluxDB con successo.")
+        except Exception as e:
+            print(f"Errore durante la scrittura dei dati su InfluxDB: {e}")
