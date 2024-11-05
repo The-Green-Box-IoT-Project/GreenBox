@@ -1,6 +1,7 @@
 import cherrypy
 
 import catalog_interface
+from catalog_interface import validate_login, validate_token
 from catalog_dispatcher import CatalogRequest
 
 
@@ -28,7 +29,27 @@ class CatalogGetResolver:
 class CatalogPostResolver:
     @staticmethod
     def resolve(request: CatalogRequest, path, query):
-        pass
+        response = None
+        match request:
+            case CatalogRequest.NOT_FOUND:
+                raise cherrypy.HTTPError(status=404)
+            case CatalogRequest.LOGIN:
+                response = CatalogPostResolver._login(query)
+        return response
+
+    @staticmethod
+    def _login(query):
+        if 'token' not in query:
+            username = query['username']
+            password = query['password']
+            token = validate_login(username, password)
+        else:
+            token = query['token']
+        response = {
+            'token': token,
+            'valid': validate_token(token)
+        }
+        return response
 
 
 class CatalogPutResolver:

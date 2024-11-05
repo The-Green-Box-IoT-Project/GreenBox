@@ -4,6 +4,7 @@ from enum import Enum, auto
 class CatalogRequest(Enum):
     NOT_FOUND = auto(),
     RETRIEVE_BROKER = auto(),
+    LOGIN = auto(),
 
 
 class CatalogGetDispatcher:
@@ -25,7 +26,17 @@ class CatalogGetDispatcher:
 class CatalogPostDispatcher:
     @staticmethod
     def dispatch(path, query):
-        pass
+        if CatalogPostDispatcher._is_login_request(path):
+            return CatalogRequest.LOGIN
+        return CatalogRequest.NOT_FOUND
+
+    @staticmethod
+    def _is_login_request(path):
+        if len(path) == 0:
+            return False
+        if path[0] == 'login':
+            return True
+        return False
 
 
 class CatalogPutDispatcher:
