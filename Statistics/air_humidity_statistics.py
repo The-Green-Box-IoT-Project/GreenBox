@@ -1,17 +1,17 @@
 import time
 import json
+import os  # Per accedere alle variabili di ambiente
 from influxdb_adaptor import InfluxDBAdaptor
 from data_statistics import (
-    remove_outliers, calculate_variance_stddev, linear_trend,
-    calculate_statistics, compare_with_historical_in_chunks
+    moving_average, remove_outliers, calculate_variance_stddev, linear_trend,
+    calculate_statistics
 )
 from tools.my_mqtt import MyMQTT
 
 
-class AirHumidityStatistics:
-    def __init__(self, influxdb_adaptor, historical_file, mqtt_client):
+class HumidityStatistics:
+    def __init__(self, influxdb_adaptor, mqtt_client):
         self.influxdb_adaptor = influxdb_adaptor
-        self.historical_file = historical_file
         self.mqtt_client = mqtt_client  # Istanza del client MQTT
 
     def publish_statistics(self, measurement_name, field_name, host_name, topic_name):
@@ -22,8 +22,13 @@ class AirHumidityStatistics:
             )
             data = json.loads(json_data)
 
-            # Estrai i valori dell'umidità
+            # Estrai i valori di umidità
             humidity_values = [entry['value'] for entry in data]
+
+            if not humidity_values:
+                print("Nessun dato di umidità disponibile.")
+                time.sleep(60)
+                continue  # Salta l'iterazione se non ci sono dati
 
             # Rimuovi outlier
             cleaned_humidity = remove_outliers(humidity_values)
@@ -47,39 +52,54 @@ class AirHumidityStatistics:
                 }
 
                 # Pubblica le statistiche su MQTT
-                self.mqtt_client.myPublish("statistics/humidity", stats_to_publish)
+                self.mqtt_client.myPublish("statistics/air_humidity", stats_to_publish)
 
-                # Confronta con i dati storici e pubblica il confronto
-                comparison = compare_with_historical_in_chunks(
-                    self.historical_file, current_stats, variance, slope, cleaned_humidity
-                )
-                if comparison:
-                    self.mqtt_client.myPublish("statistics/humidity/comparison", comparison)
+                # Pubblica le statistiche su InfluxDB
+                self.write_to_influxdb(stats_to_publish, topic_name)
 
             # Attendi prima di ripubblicare le statistiche
             time.sleep(60)
 
+    def write_to_influxdb(self, stats, topic):
+        """Scrivi le statistiche in InfluxDB."""
+        self.influxdb_adaptor.write_data(
+            measurement_name="humidity_statistics",
+            tags={
+                "host": "MacBook-Pro-di-luca-3.local",
+                "topic": "GreenBox/d1/s1/air_humidity/statistics"
+            },
+            fields={
+                "mean_humidity": stats["mean_humidity"],
+                "min_humidity": stats["min_humidity"],
+                "max_humidity": stats["max_humidity"],
+                "variance": stats["variance"],
+                "stddev": stats["stddev"],
+                "slope_of_trend": stats["slope_of_trend"]
+            },
+            timestamp=int(stats["timestamp"] * 1000)  # Timestamp in millisecondi
+        )
+
 
 if __name__ == "__main__":
+    # Carica le variabili d'ambiente dal file .env (opzionale, se usi python-dotenv)
     influxdb_adaptor = InfluxDBAdaptor(
-        bucket="Box1",
-        org="GreenBox",
-        token="smHyTmK0VIHnSQxAkDW_Hf8-fMvVjxxDbfrUPuD7VR6ejbbOULxHZREECno9UwwhX8F9X_gUbIC8eWYGE9ykog==",
-        url="http://localhost:8086"
+        bucket=os.environ.get("INFLUXDB_BUCKET"),
+        org=os.environ.get("INFLUXDB_ORG"),
+        token=os.environ.get("INFLUX_TOKEN"),
+        url=os.environ.get("INFLUXDB_URL")
     )
 
-    mqtt_client = MyMQTT(clientID="AirHumidityStatsPublisher", broker="localhost", port=1883)
+    mqtt_client = MyMQTT(clientID="HumidityStatsPublisher", broker="localhost", port=1883)
     mqtt_client.start()
 
-    air_humidity_statistics = AirHumidityStatistics(
-        influxdb_adaptor,
-        historical_file='../mock_data_final.json',
+    humidity_statistics = HumidityStatistics(
+        influxdb_adaptor=influxdb_adaptor,
         mqtt_client=mqtt_client
     )
 
-    air_humidity_statistics.publish_statistics(
+    humidity_statistics.publish_statistics(
         measurement_name="mqtt_consumer",
-        field_name="humidity",
-        host_name="MBP-di-luca-2.lan",
-        topic_name="GreenBox/d1/s1/humidity"
+        field_name="air_humidity",
+        host_name="MacBook-Pro-di-luca-3.local",
+        topic_name="GreenBox/d1/s1/air_humidity"
     )
