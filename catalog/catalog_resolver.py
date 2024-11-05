@@ -1,8 +1,7 @@
 import cherrypy
 
-import catalog_interface
-from catalog_interface import validate_login, validate_token
 from catalog_dispatcher import CatalogRequest
+from catalog_interface import validate_login, validate_token, retrieve_resources, retrieve_broker
 
 
 class CatalogGetResolver:
@@ -18,7 +17,7 @@ class CatalogGetResolver:
 
     @staticmethod
     def _retrieve_broker():
-        broker_ip, broker_port = catalog_interface.retrieve_broker()
+        broker_ip, broker_port = retrieve_broker()
         response = {
             'broker_ip': broker_ip,
             'broker_port': broker_port
@@ -35,19 +34,29 @@ class CatalogPostResolver:
                 raise cherrypy.HTTPError(status=404)
             case CatalogRequest.LOGIN:
                 response = CatalogPostResolver._login(query)
+            case CatalogRequest.TOKEN_LOGIN:
+                response = CatalogPostResolver._token_login(query)
         return response
 
     @staticmethod
     def _login(query):
-        if 'token' not in query:
-            username = query['username']
-            password = query['password']
-            token = validate_login(username, password)
-        else:
-            token = query['token']
+        username = query['username']
+        password = query['password']
+        token = validate_login(username, password)
         response = {
             'token': token,
-            'valid': validate_token(token)
+            'valid': validate_token(token),
+            'resources': retrieve_resources(token)
+        }
+        return response
+
+    @staticmethod
+    def _token_login(query):
+        token = query['token']
+        response = {
+            'token': token,
+            'valid': validate_token(token),
+            'resources': retrieve_resources(token)
         }
         return response
 

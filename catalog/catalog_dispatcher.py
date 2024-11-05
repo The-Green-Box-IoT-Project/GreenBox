@@ -5,6 +5,7 @@ class CatalogRequest(Enum):
     NOT_FOUND = auto(),
     RETRIEVE_BROKER = auto(),
     LOGIN = auto(),
+    TOKEN_LOGIN = auto(),
 
 
 class CatalogGetDispatcher:
@@ -26,15 +27,29 @@ class CatalogGetDispatcher:
 class CatalogPostDispatcher:
     @staticmethod
     def dispatch(path, query):
-        if CatalogPostDispatcher._is_login_request(path):
+        if CatalogPostDispatcher._is_login_request(path, query):
             return CatalogRequest.LOGIN
+        if CatalogPostDispatcher._is_token_login_request(path, query):
+            return CatalogRequest.TOKEN_LOGIN
         return CatalogRequest.NOT_FOUND
 
     @staticmethod
-    def _is_login_request(path):
-        if len(path) == 0:
+    def _is_login_request(path, query):
+        if len(path) != 1:
             return False
-        if path[0] == 'login':
+        if path[0] != 'login':
+            return False
+        if {'username', 'password'}.issubset(query):
+            return True
+        return False
+
+    @staticmethod
+    def _is_token_login_request(path, query):
+        if len(path) != 1:
+            return False
+        if path[0] != 'login':
+            return False
+        if 'token' in query:
             return True
         return False
 
