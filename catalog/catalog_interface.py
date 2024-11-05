@@ -30,9 +30,9 @@ def validate_login(username, password):
     with open(USERS_FILE, 'r') as f:
         users = json.load(f)
     if username not in users:
-        return None
+        return ""
     if not users[username]['password'] == password:
-        return None
+        return ""
     return _generate_token(username, password)
 
 
@@ -43,7 +43,7 @@ def _generate_token(username, password):
         token = str(uuid.uuid4())
         if token not in sessions:
             break
-    sessions[token] = {'username': username, 'password': password}
+    sessions[token] = {'username': username}
     with open(SESSIONS_FILE, 'w') as f:
         f.write(json.dumps(sessions))
     return token

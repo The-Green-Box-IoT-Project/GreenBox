@@ -45,7 +45,11 @@ class CatalogPostResolver:
             token = validate_login(username, password)
         else:
             token = query['token']
-        return token, validate_token(token)
+        response = {
+            'token': token,
+            'valid': validate_token(token)
+        }
+        return response
 
 
 class CatalogPutResolver:
