@@ -78,3 +78,17 @@ def retrieve_resources(token):
         rcs_ext = json.load(f)
         resource_catalog = [{rc: rcs_ext[rc]} for rc in rcs]
     return resource_catalog
+
+
+def signup_user(username, password):
+    with open(USERS_FILE, 'r') as f:
+        users = json.load(f)
+    if username in users:
+        return False
+    users[username] = {
+        'password': password,
+        'resources': []
+    }
+    with open(USERS_FILE, 'w') as f:
+        f.write(json.dumps(users))
+    return True

@@ -5,5 +5,9 @@
       "rc00000001",
       "rc00000002"
     ]
+  },
+  "senpai": {
+    "password": "password",
+    "resources": []
   }
 }
