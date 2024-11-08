@@ -54,8 +54,10 @@ class CatalogPostResolver:
         match request:
             case CatalogRequest.NOT_FOUND:
                 raise cherrypy.HTTPError(status=404)
+            case CatalogRequest.REGISTER_ID:
+                response = CatalogPostResolver._register_id(query)
             case CatalogRequest.SIGN_UP:
-                response = CatalogPostResolver._register(query)
+                response = CatalogPostResolver._sign_up(query)
             case CatalogRequest.LOGIN:
                 response = CatalogPostResolver._login(query)
             case CatalogRequest.TOKEN_LOGIN:
@@ -63,7 +65,17 @@ class CatalogPostResolver:
         return response
 
     @staticmethod
-    def _register(query):
+    def _register_id(query):
+        token = query['token']
+        if token != admin_token:
+            raise cherrypy.HTTPError(status=403)
+        device_id = query['device_id']
+        generator.register_device(device_id)
+        response = {'device_id': device_id}
+        return response
+
+    @staticmethod
+    def _sign_up(query):
         token = None
         msg = None
         username = query['username']

@@ -5,6 +5,7 @@ class CatalogRequest(Enum):
     NOT_FOUND = auto(),
     RETRIEVE_BROKER = auto(),
     GENERATE_ID = auto(),
+    REGISTER_ID = auto(),
     SIGN_UP = auto(),
     LOGIN = auto(),
     TOKEN_LOGIN = auto(),
@@ -33,7 +34,7 @@ class CatalogGetDispatcher:
             return False
         if path[0] != 'generate_id':
             return False
-        if {'device_type', 'token'}.issubset(query):
+        if not {'device_type', 'token'}.issubset(query):
             return False
         return True
 
@@ -41,6 +42,8 @@ class CatalogGetDispatcher:
 class CatalogPostDispatcher:
     @staticmethod
     def dispatch(path, query):
+        if CatalogPostDispatcher._is_register_id_request(path, query):
+            return CatalogRequest.REGISTER_ID
         if CatalogPostDispatcher._is_sign_up_request(path, query):
             return CatalogRequest.SIGN_UP
         if CatalogPostDispatcher._is_login_request(path, query):
@@ -50,14 +53,24 @@ class CatalogPostDispatcher:
         return CatalogRequest.NOT_FOUND
 
     @staticmethod
+    def _is_register_id_request(path, query):
+        if len(path) != 1:
+            return False
+        if path[0] != 'register_id':
+            return False
+        if not {'device_id', 'token'}.issubset(query):
+            return False
+        return True
+
+    @staticmethod
     def _is_sign_up_request(path, query):
         if len(path) != 1:
             return False
         if path[0] != 'signup':
             return False
-        if {'username', 'password', 'repeat_password'}.issubset(query):
-            return True
-        return False
+        if not {'username', 'password', 'repeat_password'}.issubset(query):
+            return False
+        return True
 
     @staticmethod
     def _is_login_request(path, query):
