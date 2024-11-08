@@ -4,6 +4,7 @@ from enum import Enum, auto
 class CatalogRequest(Enum):
     NOT_FOUND = auto(),
     RETRIEVE_BROKER = auto(),
+    GENERATE_ID = auto(),
     SIGN_UP = auto(),
     LOGIN = auto(),
     TOKEN_LOGIN = auto(),
@@ -14,15 +15,27 @@ class CatalogGetDispatcher:
     def dispatch(path, query):
         if CatalogGetDispatcher._is_broker_request(path):
             return CatalogRequest.RETRIEVE_BROKER
+        if CatalogGetDispatcher._is_generate_id_request(path, query):
+            return CatalogRequest.GENERATE_ID
         return CatalogRequest.NOT_FOUND
 
     @staticmethod
     def _is_broker_request(path):
         if len(path) == 0:
             return False
-        if path[0] == 'broker':
-            return True
-        return False
+        if path[0] != 'broker':
+            return False
+        return True
+
+    @staticmethod
+    def _is_generate_id_request(path, query):
+        if len(path) == 0:
+            return False
+        if path[0] != 'generate_id':
+            return False
+        if {'device_type', 'token'}.issubset(query):
+            return False
+        return True
 
 
 class CatalogPostDispatcher:

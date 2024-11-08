@@ -1,7 +1,14 @@
-import cherrypy
+import os
 
-from catalog_dispatcher import CatalogRequest
+import cherrypy
+from dotenv import load_dotenv
+
 import catalog_interface
+from catalog_dispatcher import CatalogRequest
+from generator import generator
+
+load_dotenv()
+admin_token = os.getenv('ADMIN_TOKEN')
 
 
 class CatalogGetResolver:
@@ -13,6 +20,8 @@ class CatalogGetResolver:
                 raise cherrypy.HTTPError(status=404)
             case CatalogRequest.RETRIEVE_BROKER:
                 response = CatalogGetResolver._retrieve_broker()
+            case CatalogRequest.GENERATE_ID:
+                response = CatalogGetResolver._generate_id(query)
         return response
 
     @staticmethod
@@ -21,6 +30,19 @@ class CatalogGetResolver:
         response = {
             'broker_ip': broker_ip,
             'broker_port': broker_port
+        }
+        return response
+
+    @staticmethod
+    def _generate_id(query):
+        token = query['token']
+        if token != admin_token:
+            raise cherrypy.HTTPError(status=403)
+        device_type = query['device_type']
+        device_id = generator.generate_id(device_type)
+        response = {
+            'device_id': device_id,
+            'device_type': device_type
         }
         return response
 
