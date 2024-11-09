@@ -6,12 +6,12 @@
     {
       "name": "Temperature",
       "unit": "Cel",
-      "topic": "temperature"
+      "field": "temperature"
     },
     {
       "name": "Humidity",
       "unit": "%",
-      "topic": "humidity"
+      "field": "humidity"
     }
   ]
 }

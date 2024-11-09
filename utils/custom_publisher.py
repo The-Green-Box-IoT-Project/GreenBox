@@ -1,4 +1,5 @@
 import logging
+import json
 
 import paho.mqtt.client as mqtt
 
@@ -28,4 +29,4 @@ class CustomPublisher:
 
     def publish(self, message, qos=2):
         logging.debug('Client "%s" published message on topic "%s": "%s"' % (self.client_id, self.topic, message))
-        self._mqtt.publish(self.topic, message, qos)
+        self._mqtt.publish(self.topic, json.dumps(message), qos)
