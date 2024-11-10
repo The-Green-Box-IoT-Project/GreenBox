@@ -1,0 +1,12 @@
+{
+  "device_id": "grodan",
+  "device_name": "Grodan_Sensor",
+  "pin": 2,
+  "measurements": [
+    {
+      "name": "Humidity",
+      "unit": "%",
+      "field": "soil_humidity"
+    }
+  ]
+}

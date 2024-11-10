@@ -27,4 +27,5 @@ class Sensor:
          self.measurements) = load_sensor_attributes(config_path)
 
     def _build_topics(self, parent_topic):
+        # todo: only one topic for dht11
         return (f"""{parent_topic}/{self.device_id}/{m['field']}""" for m in self.measurements)

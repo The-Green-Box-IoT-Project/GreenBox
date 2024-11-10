@@ -1,0 +1,14 @@
+{
+  "pH": {
+    "base_value": 5,
+    "daily_seasonality": {
+      "times": [0, 6, 12, 18, 23],
+      "values": [0, 0.01, 0, 0, -0.01, 0]
+    },
+    "yearly_seasonality": {
+      "times": [0, 90, 182, 273, 364],
+      "values": [1, 0.8, 0.6, 0.8, 1]
+    },
+    "noise": {"mean": 0, "std":  0.05, "correlation":  0.5}
+  }
+}
