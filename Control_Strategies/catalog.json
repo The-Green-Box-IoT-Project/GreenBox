@@ -1,0 +1,14 @@
+{
+  "clients": [
+    {
+      "client_name": "Cliente1",
+      "raspberry_id": "rb01",
+      "control_strategy": "BasicControlStrategy"
+    },
+    {
+      "client_name": "Cliente2",
+      "raspberry_id": "rb02",
+      "control_strategy": "AdvancedControlStrategy"
+    }
+  ]
+}

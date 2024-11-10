@@ -1,3 +1,4 @@
+
 import json
 import paho.mqtt.client as mqtt
 
@@ -7,68 +8,77 @@ class MyMQTT:
         self.broker = broker
         self.port = port
         self.notifier = notifier if notifier else self.notify  # Usa notifier passato o il metodo notify di default
-        self.notifier = self.notify
         self.clientID = clientID
         self._topic = ""
         self._isSubscriber = False
-        # create an instance of paho.mqtt.client
+        self._control_module = None  # Aggiunge un riferimento al modulo di controllo
+
+        # Crea un'istanza di paho.mqtt.client
         self._paho_mqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, clientID)
         # register the callback
         self._paho_mqtt.on_connect = self.myOnConnect
         self._paho_mqtt.on_message = self.myOnMessageReceived
+
+    def set_control_module(self, control_module):
+        """
+        Assegna il modulo di controllo che verrà notificato con le statistiche.
+        :param control_module: Istanza del modulo di controllo
+        """
+        self._control_module = control_module
 
     @staticmethod
     def notify(topic, payload):
         print(f"Received message on topic '{topic}': {payload}")
 
     def myOnConnect(self, client, userdata, flags, reason_code, properties=None):
-        if hasattr(flags, 'session_present'):
-            session_present = flags.session_present
-        else:
-            session_present = flags.get("session present", False)
-
-        if session_present:
-            print("Session present.")
-
         if reason_code == 0:
-            print("Connected to %s with success." % self.broker)
+            print(f"Connected to {self.broker} with success.")
         else:
-            print("Connection failed with reason code: %d" % reason_code)
+            print(f"Connection failed with reason code: {reason_code}")
 
     def myOnMessageReceived(self, client, userdata, message):
-        # A new message is received
-        self.notifier(message.topic, message.payload)
+        """
+        Callback chiamato quando si riceve un nuovo messaggio MQTT.
+        Se il modulo di controllo è configurato, inoltra il messaggio al modulo di controllo.
+        """
+        payload = message.payload.decode('utf-8')
+
+        if self._control_module:
+            # Passa le statistiche al modulo di controllo
+            data = json.loads(payload)
+            self._control_module.analyze_statistics(data)
 
     def myPublish(self, topic, msg):
-        # publish a message with a certain topic
+        """
+        Pubblica un messaggio su un certo topic.
+        :param topic: Topic MQTT su cui pubblicare
+        :param msg: Messaggio da pubblicare (dizionario)
+        """
         print(f"Publishing message on topic '{topic}': {msg}")
-        self._paho_mqtt.publish(topic, json.dumps(msg), 2)
+        self._paho_mqtt.publish(topic, json.dumps(msg), qos=2)
 
     def mySubscribe(self, topic):
-        # subscribe for a topic
-        self._paho_mqtt.subscribe(topic, 2)
-        # just to remember that it works also as a subscriber
+        """
+        Sottoscrivi al topic specificato.
+        :param topic: Topic MQTT a cui sottoscriversi
+        """
+        self._paho_mqtt.subscribe(topic, qos=2)
         self._isSubscriber = True
         self._topic = topic
-        print("subscribed to %s" % topic)
-
-    def check_publish_status(self, mid):
-        self._paho_mqtt.loop()
+        print(f"Subscribed to topic: {topic}")
 
     def start(self):
-        # manage connection to broker
+        """
+        Gestisce la connessione al broker.
+        """
         self._paho_mqtt.connect(self.broker, self.port)
         self._paho_mqtt.loop_start()
 
-    def unsubscribe(self):
-        if self._isSubscriber:
-            # remember to unsubscribe if it is working also as subscriber
-            self._paho_mqtt.unsubscribe(self._topic)
-
     def stop(self):
+        """
+        Ferma la connessione MQTT e annulla la sottoscrizione.
+        """
         if self._isSubscriber:
-            # remember to unsubscribe if it is working also as subscriber
             self._paho_mqtt.unsubscribe(self._topic)
-
         self._paho_mqtt.loop_stop()
         self._paho_mqtt.disconnect()

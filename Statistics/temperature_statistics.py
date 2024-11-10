@@ -1,6 +1,6 @@
 import time
 import json
-import os  # Per accedere alle variabili di ambiente
+import os
 from influxdb_adaptor import InfluxDBAdaptor
 from data_statistics import (
     moving_average, remove_outliers, calculate_variance_stddev, linear_trend,
@@ -10,36 +10,37 @@ from tools.my_mqtt import MyMQTT
 
 
 class TemperatureStatistics:
-    def __init__(self, influxdb_adaptor, mqtt_client):
+    def __init__(self, influxdb_adaptor, mqtt_client, base_topic):
         self.influxdb_adaptor = influxdb_adaptor
-        self.mqtt_client = mqtt_client  # Istanza del client MQTT
+        self.mqtt_client = mqtt_client
+        self.base_topic = base_topic  # Base topic for MQTT communication
 
     def publish_statistics(self, measurement_name, field_name, host_name, topic_name):
         while True:
-            # Ottieni i dati della temperatura dall'adaptor
+            # Get temperature data from the adaptor
             json_data = self.influxdb_adaptor.get_json_data(
                 measurement_name, field_name, host_name, topic_name
             )
             data = json.loads(json_data)
 
-            # Estrai i valori di temperatura
+            # Extract temperature values
             temperature_values = [entry['value'] for entry in data]
 
             if not temperature_values:
-                print("Nessun dato di temperatura disponibile.")
+                print("No temperature data available.")
                 time.sleep(60)
-                continue  # Salta l'iterazione se non ci sono dati
+                continue  # Skip iteration if no data
 
-            # Rimuovi outlier
+            # Remove outliers
             cleaned_temperatures = remove_outliers(temperature_values)
 
-            # Calcola statistiche per i dati attuali
+            # Calculate statistics
             variance, stddev = calculate_variance_stddev(cleaned_temperatures)
             slope = linear_trend(cleaned_temperatures)
             current_stats = calculate_statistics(cleaned_temperatures)
 
             if current_stats:
-                # Prepara le statistiche per la pubblicazione
+                # Prepare statistics for publication
                 timestamp = time.time()
                 stats_to_publish = {
                     "timestamp": timestamp,
@@ -51,22 +52,25 @@ class TemperatureStatistics:
                     "slope_of_trend": slope
                 }
 
-                # Pubblica le statistiche su MQTT
-                self.mqtt_client.myPublish("statistics/temperature", stats_to_publish)
+                # **Construct the statistics topic dynamically**
+                stats_topic = f"{self.base_topic}/statistics"
 
-                # Pubblica le statistiche su InfluxDB
+                # Publish statistics over MQTT
+                self.mqtt_client.myPublish(stats_topic, stats_to_publish)
+
+                # Write statistics to InfluxDB
                 self.write_to_influxdb(stats_to_publish, topic_name)
 
-            # Attendi prima di ripubblicare le statistiche
+            # Wait before republishing statistics
             time.sleep(60)
 
     def write_to_influxdb(self, stats, topic):
-        """Scrivi le statistiche in InfluxDB."""
+        """Write statistics to InfluxDB."""
         self.influxdb_adaptor.write_data(
             measurement_name="temperature_statistics",
             tags={
                 "host": "MacBook-Pro-di-luca-3.local",
-                "topic": "GreenBox/d1/s1/temperature/statistics"
+                "topic": topic  # Use the dynamic topic
             },
             fields={
                 "mean_temperature": stats["mean_temperature"],
@@ -76,12 +80,13 @@ class TemperatureStatistics:
                 "stddev": stats["stddev"],
                 "slope_of_trend": stats["slope_of_trend"]
             },
-            timestamp=int(stats["timestamp"] * 1000)  # Timestamp in millisecondi
+            timestamp=int(stats["timestamp"] * 1000)  # Timestamp in milliseconds
         )
 
 
+
 if __name__ == "__main__":
-    # Carica le variabili d'ambiente dal file .env (opzionale, se usi python-dotenv)
+    # Load environment variables from .env (optional)
     influxdb_adaptor = InfluxDBAdaptor(
         bucket=os.environ.get("INFLUXDB_BUCKET"),
         org=os.environ.get("INFLUXDB_ORG"),
@@ -92,14 +97,26 @@ if __name__ == "__main__":
     mqtt_client = MyMQTT(clientID="TemperatureStatsPublisher", broker="localhost", port=1883)
     mqtt_client.start()
 
+    # Define identifiers for dynamic topic construction
+    client_id = "01f20b9e-6df4-43df-9fd6-c1376bb2ba41"
+    greenhouse_id = "greenhouse1"
+    raspberry_id = "rb01"
+    sensor_id = "dht11"
+    measurement_type = "temperature"
+
+    # Construct the base topic dynamically
+    base_topic = f"/{client_id}/{greenhouse_id}/{raspberry_id}/{sensor_id}/{measurement_type}"
+
     temperature_statistics = TemperatureStatistics(
         influxdb_adaptor=influxdb_adaptor,
-        mqtt_client=mqtt_client
+        mqtt_client=mqtt_client,
+        base_topic=base_topic
     )
 
     temperature_statistics.publish_statistics(
         measurement_name="mqtt_consumer",
         field_name="temperature",
         host_name="MacBook-Pro-di-luca-3.local",
-        topic_name="GreenBox/d1/s1/temperature"
+        topic_name=base_topic
     )
+
