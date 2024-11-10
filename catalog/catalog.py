@@ -3,13 +3,23 @@ from pathlib import Path
 
 import cherrypy
 
-import catalog_interface
 from catalog_dispatcher import CatalogGetDispatcher, CatalogPostDispatcher, CatalogPutDispatcher, \
     CatalogDeleteDispatcher
 from catalog_resolver import CatalogGetResolver, CatalogPostResolver, CatalogPutResolver, CatalogDeleteResolver
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
+
+
+def retrieve_endpoint():
+    """
+    Used to retrieve ip and port of the catalog, inside the catalog itself
+    """
+    with open(CONFIG_FILE, 'r') as f:
+        data = json.load(f)
+        catalog_ip = data['catalog_ip']
+        catalog_port = data['catalog_port']
+    return catalog_ip, catalog_port
 
 
 class Catalog:
@@ -43,7 +53,7 @@ if __name__ == '__main__':
             'tools.sessions.on': True
         }
     }
-    catalog_ip, catalog_port = catalog_interface.retrieve_endpoint()
+    catalog_ip, catalog_port = retrieve_endpoint()
     socket_config = {
         'server.socket_host': catalog_ip,
         'server.socket_port': int(catalog_port)

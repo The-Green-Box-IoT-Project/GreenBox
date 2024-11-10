@@ -1,14 +1,1 @@
-{
-  "dht11_47290614-2e0a-4b9d-8a96-3b0ef350e30d": {
-    "associated": false
-  },
-  "dht11_d80a86be-241c-4cec-9f3c-a8d4b918db84": {
-    "associated": false
-  },
-  "dht11_c54cd3a9-8b6e-4310-af0a-69f629b5edfb": {
-    "associated": false
-  },
-  "dht11_f68996e2-f7c0-4434-a8d2-0d3955d1c99a": {
-    "associated": false
-  }
-}
+{"a95fa2ec-082b-45e5-ab42-b7b334897243": {"owner": null, "name": null, "device_type": "dht11"}}
