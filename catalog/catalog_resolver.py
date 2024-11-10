@@ -220,26 +220,34 @@ class CatalogPutResolver:
         token = query['token']
         greenhouse_id = query['greenhouse_id']
         greenhouse_name = query['greenhouse_name']
-        msg = None
-        result = False
+        # Token validity verification
         is_token_valid = catalog_interface.verify_token(token)
-        if is_token_valid:
-            username = catalog_interface.retrieve_username_by_token(token)
-            if catalog_interface.verify_greenhouse_existence(greenhouse_id):
-                if not catalog_interface.verify_greenhouse_ownership(greenhouse_id, username):
-                    catalog_interface.associate_greenhouse(greenhouse_id, greenhouse_name, username)
-                    result = True
-                else:
-                    msg = 'greenhouse_already_associated'
-            else:
-                msg = 'greenhouse_not_registered'
-        else:
-            msg = 'invalid_token'
-        response = {
-            'msg': msg,
-            'result': result
+        if not is_token_valid:
+            return {
+                'msg': 'invalid_token',
+                'success': False
+            }
+        # Greenhouse registration verification
+        is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
+        if not is_greenhouse_registered:
+            return {
+                'msg': 'greenhouse_not_registered',
+                'success': False
+            }
+        # Greenhouse association verification
+        username = catalog_interface.retrieve_username_by_token(token)
+        is_greenhouse_associated = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
+        if is_greenhouse_associated:
+            return {
+                'msg': 'greenhouse_already_associated',
+                'success': False
+            }
+        # Greenhouse association
+        catalog_interface.associate_greenhouse(greenhouse_id, greenhouse_name, username)
+        return {
+            'msg': None,
+            'success': True
         }
-        return response
 
     @staticmethod
     def _associate_device(query):
@@ -247,10 +255,55 @@ class CatalogPutResolver:
         Called by a user that wants to associate a new device to its
         greenhouse.
         path: associate/device
-        query: device_id, greenhouse_id, token
+        query: device_id, device_name, greenhouse_id, token
         """
-        # TODO
-        return None
+        token = query['token']
+        device_id = query['device_id']
+        device_name = query['device_name']
+        greenhouse_id = query['greenhouse_id']
+
+        # Token validity verification
+        is_token_valid = catalog_interface.verify_token(token)
+        if not is_token_valid:
+            return {
+                'msg': 'invalid_token',
+                'success': False
+            }
+        # Greenhouse registration verification
+        is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
+        if not is_greenhouse_registered:
+            return {
+                'msg': 'greenhouse_not_registered',
+                'success': False
+            }
+        # Greenhouse association verification
+        username = catalog_interface.retrieve_username_by_token(token)
+        is_greenhouse_associated = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
+        if not is_greenhouse_associated:
+            return {
+                'msg': 'greenhouse_not_associated',
+                'success': False
+            }
+        # Device registration verification
+        is_device_registered = catalog_interface.verify_device_existence(device_id)
+        if not is_device_registered:
+            return {
+                'msg': 'device_not_registered',
+                'success': False
+            }
+        # Device association verification
+        is_device_associated = catalog_interface.verify_device_ownership(device_id, username)
+        if is_device_associated:
+            return {
+                'msg': 'device_already_associated',
+                'success': False
+            }
+        # Device association
+        catalog_interface.associate_device(device_id, greenhouse_id, device_name, username)
+        return {
+            'msg': None,
+            'success': True
+        }
 
 
 class CatalogDeleteResolver:

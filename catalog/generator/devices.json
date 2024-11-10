@@ -1,1 +1,8 @@
-{"a95fa2ec-082b-45e5-ab42-b7b334897243": {"owner": null, "name": null, "device_type": "dht11"}}
+{
+  "a95fa2ec-082b-45e5-ab42-b7b334897243": {
+    "owner": "admin",
+    "associated_greenhouse": "c9f3d27c-c3d7-4cdc-95dc-30167eecc262",
+    "name": "dht11_01",
+    "device_type": "dht11"
+  }
+}

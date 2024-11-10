@@ -57,6 +57,7 @@ def register_device(device_id, device_type):
         devices = json.load(f)
     devices[device_id] = {
         'owner': None,
+        'associated_greenhouse': None,
         'name': None,
         'device_type': device_type
     }

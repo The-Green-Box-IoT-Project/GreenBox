@@ -123,25 +123,13 @@ def verify_greenhouse_existence(greenhouse_id):
     return False
 
 
-def verify_device_existence(device_id):
-    """
-    Used to verify that a specified device is registered. This is
-    to prevent that an user can associate a device that is not registered.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    if device_id in devices:
-        return True
-    return False
-
-
 def verify_greenhouse_ownership(greenhouse_id, username):
     """
     Used to verify if the user owns a specific greenhouse.
     """
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-    if greenhouse_id in users[username]['greenhouses']:
+    with open(GREENHOUSES_FILE, 'r') as f:
+        greenhouses = json.load(f)
+    if greenhouses[greenhouse_id]['owner'] == username:
         return True
     return False
 
@@ -180,6 +168,29 @@ def associate_greenhouse(greenhouse_id, greenhouse_name, username):
         f.write(json.dumps(greenhouses))
 
 
+def verify_device_existence(device_id):
+    """
+    Used to verify that a specified device is registered. This is
+    to prevent that an user can associate a device that is not registered.
+    """
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    if device_id in devices:
+        return True
+    return False
+
+
+def verify_device_ownership(device_id, greenhouse_id):
+    """
+    Used to verify if the user owns a specific device.
+    """
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    if devices[device_id]['associated_greenhouse'] == greenhouse_id:
+        return True
+    return False
+
+
 def retrieve_devices(greenhouse_id):
     """
     Used to retrieve all the devices registered under the given
@@ -190,6 +201,27 @@ def retrieve_devices(greenhouse_id):
     if greenhouse_id in greenhouses:
         return greenhouses[greenhouse_id]
     return None
+
+
+def associate_device(device_id, greenhouse_id, device_name, username):
+    """
+    Used to associate a device to a user and its greenhouse.
+    """
+    # Updating resource's catalog
+    # TODO: rename resources file into greenhouses
+    with open(RESOURCES_FILE, 'r') as f:
+        resources = json.load(f)
+    resources[greenhouse_id].append(device_id)
+    with open(RESOURCES_FILE, 'w') as f:
+        f.write(json.dumps(resources))
+    # Updating devices' catalog
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    devices[device_id]['owner'] = username
+    devices[device_id]['associated_greenhouse'] = greenhouse_id
+    devices[device_id]['name'] = device_name
+    with open(DEVICES_FILE, 'w') as f:
+        f.write(json.dumps(devices))
 
 
 if __name__ == '__main__':
