@@ -7,5 +7,5 @@ logs/
 /telegraf_start.bat
 *.pyc
 /mock_data_final.json
-
+/catalog/.env
 
