@@ -1,6 +1,6 @@
 from pathlib import Path
 import logging
-import numpy as np
+import time
 
 from utils.custom_publisher import CustomPublisher
 from Raspberry_Connector.sensors.sensor import Sensor, hardware_read
@@ -16,7 +16,7 @@ class pH_meter(Sensor):
                  broker_ip, broker_port,
                  parent_topic):
         super().__init__(CONFIG_FILE)
-        self.topic = next(self._build_topics(parent_topic))
+        self.topic = self._build_topics(parent_topic)
         self.field = self.measurements[0]['field']
         self.unit = self.measurements[0]['unit']
 
@@ -30,11 +30,18 @@ class pH_meter(Sensor):
     def stop(self):
         self.publisher.stop()
 
-    def read_value(self):
+    def _get_last_measurement(self):
         message = {
             self.field: hardware_read(self.device_pin),
         }
         return message
+
+    def read_value(self):
+        self.start()
+        while True:
+            message = self._get_last_measurement()
+            self.publisher.publish(message)
+            time.sleep(2)
 
 
 class pH_meter_sim(pH_meter):
@@ -66,9 +73,16 @@ class pH_meter_sim(pH_meter):
         time_series_shape, time_series_index = self.custom_time_series(measurement_name)
         return SimulateRealTimeReading(time_series_shape, time_series_index, measurement_name)
 
-    def read_value(self):
+    def _get_last_measurement(self):
         value = self.pH_values.read_last_measurement()
         message = {
             self.field: round(value * 20) / 20
         }
         return message
+
+    def read_value(self):
+        self.start()
+        while True:
+            message = self._get_last_measurement()
+            self.publisher.publish(message)
+            time.sleep(2)

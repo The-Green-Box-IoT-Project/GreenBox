@@ -1,4 +1,3 @@
-import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,38 +28,10 @@ ph = pH_meter(broker_ip=raspberry.broker_ip, broker_port=raspberry.broker_port, 
 grodan = GrodanSens(broker_ip=raspberry.broker_ip, broker_port=raspberry.broker_port, parent_topic=raspberry.parent_topic)
 
 
-def publish_dht11_data():
-    dht11.start()
-    while True:
-        dht11.publisher_temperature.publish(dht11.read_value())
-        time.sleep(2)
-
-
-def publish_par_data():
-    par.start()
-    while True:
-        par.publisher.publish(par.read_value())
-        time.sleep(2)
-
-
-def publish_pH_data():
-    ph.start()
-    while True:
-        ph.publisher.publish(ph.read_value())
-        time.sleep(2)
-
-
-def publish_grodan_data():
-    grodan.start()
-    while True:
-        grodan.publisher.publish(grodan.read_value())
-        time.sleep(2)
-
-
 if __name__ == "__main__":
     with ThreadPoolExecutor(max_workers=4) as executor:  # max_workers must be equal to the number of publication tasks
         # Sends publication functions as tasks to the thread pool
-        executor.submit(publish_dht11_data)
-        executor.submit(publish_par_data)
-        executor.submit(publish_pH_data)
-        executor.submit(publish_grodan_data)
+        executor.submit(dht11.read_value)
+        executor.submit(par.read_value)
+        executor.submit(ph.read_value)
+        executor.submit(grodan.read_value)

@@ -1,10 +1,8 @@
-import pandas as pd
-from datetime import timedelta, datetime
 from pathlib import Path
 import logging
+import time
 
 from utils.custom_publisher import CustomPublisher
-from utils.tools import get_latest_entry_before_now
 from Raspberry_Connector.sensors.sensor import Sensor, hardware_read
 from Raspberry_Connector.sensors.generate_mock_time_series import SensorSimulator, MockTimeSeriesWrapper, Today, \
     SimulateRealTimeReading
@@ -19,31 +17,38 @@ class DHT11(Sensor):
                  broker_ip, broker_port,
                  parent_topic):
         super().__init__(CONFIG_FILE)
-        self.topic_temperature, self.topic_humidity = self._build_topics(parent_topic)
+
+        self.topic = self._build_topics(parent_topic)
         self.field_temperature = self.measurements[0]['field']
         self.field_humidity = self.measurements[1]['field']
         self.unit_temperature = self.measurements[0]['unit']
         self.unit_humidity = self.measurements[1]['unit']
 
-        logging.debug('Creating DHT11 publisher for temperature: %s' % self.topic_temperature)
-        self.publisher_temperature = CustomPublisher(client_id=self.device_id, topic=self.topic_temperature,
-                                                     broker=broker_ip, port=broker_port)
-        logging.debug('Creating DHT11 publisher for humidity: %s' % self.topic_humidity)
-        self.publisher_humidity = CustomPublisher(client_id=self.device_id, topic=self.topic_humidity, broker=broker_ip,
-                                                  port=broker_port)
+        logging.debug('Creating DHT11 publisher: %s' % self.topic)
+        self.publisher = CustomPublisher(client_id=self.device_id, topic=self.topic,
+                                         broker=broker_ip, port=broker_port)
 
     def start(self):
-        self.publisher_temperature.start()
+        # self.publisher_temperature.start()
+        self.publisher.start()
 
     def stop(self):
-        self.publisher_temperature.stop()
+        # self.publisher_temperature.stop()
+        self.publisher.stop()
 
-    def read_value(self):
+    def _get_last_measurement(self):
         message = {
             self.field_temperature: hardware_read(self.device_pin),
             self.field_humidity: hardware_read(self.device_pin),
         }
         return message
+
+    def read_value(self):
+        self.start()
+        while True:
+            message = self._get_last_measurement()
+            self.publisher.publish(message)
+            time.sleep(2)
 
 
 class DHT11sim(DHT11):
@@ -76,7 +81,7 @@ class DHT11sim(DHT11):
         time_series_shape, time_series_index = self.custom_time_series(measurement_name)
         return SimulateRealTimeReading(time_series_shape, time_series_index, measurement_name)
 
-    def read_value(self):
+    def _get_last_measurement(self):
         temperature_value = self.temperature_values.read_last_measurement()
         humidity_value = self.humidity_values.read_last_measurement()
         message = {
@@ -84,3 +89,10 @@ class DHT11sim(DHT11):
             self.field_humidity: humidity_value
         }
         return message
+
+    def read_value(self):
+        self.start()
+        while True:
+            message = self._get_last_measurement()
+            self.publisher.publish(message)
+            time.sleep(2)
