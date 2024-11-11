@@ -1,20 +1,30 @@
-from Raspberry_Connector.sensors import sensors_interface
+import json
+from pathlib import Path
+
+P = Path(__file__).parent.absolute()
+CONFIG_FILE = P / 'config.json'
+
+
+def load_sensor_attributes(device_config):
+    with open(device_config, 'r') as f:
+        data = json.load(f)
+        device_id = data['device_id']
+        device_name = data['device_name']
+        device_pin = data['pin']
+        device_measurements = data['measurements']
+    return device_id, device_name, device_pin, device_measurements
 
 
 def hardware_read(pin):
-    pass  # TODO
+    raise NotImplementedError
 
 
 class Sensor:
     def __init__(self, config_path):
-        device_id, device_name, device_pin, measurements = sensors_interface.retrieve_sensor(config_path)
-        self.device_id = device_id
-        self.device_name = device_name
-        self.device_pin = device_pin
-        self.measurements = measurements
-
-    def read_value(self):
-        return hardware_read(self.device_pin)
+        (self.device_id,
+         self.device_name,
+         self.device_pin,
+         self.measurements) = load_sensor_attributes(config_path)
 
     def _build_topics(self, parent_topic):
-        return (f"""{parent_topic}/{self.device_id}/{m['topic']}""" for m in self.measurements)
+        return parent_topic + '/measurements/' + self.device_id

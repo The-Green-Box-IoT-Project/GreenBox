@@ -1,8 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import os
 import logging
 from dotenv import load_dotenv
+
+
+def parse_dates():
+    start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = start_date + timedelta(days=1)
+    return start_date, end_date
 
 
 def get_latest_entry_before_now(time_series: pd.Series):

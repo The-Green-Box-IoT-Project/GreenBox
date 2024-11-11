@@ -4,42 +4,35 @@ import time
 
 from utils.custom_publisher import CustomPublisher
 from Raspberry_Connector.sensors.sensor import Sensor, hardware_read
-from Raspberry_Connector.sensors.generate_mock_time_series import SensorSimulator, MockTimeSeriesWrapper, Today, \
-    SimulateRealTimeReading
+from Raspberry_Connector.sensors.generate_mock_time_series import SensorSimulator, MockTimeSeriesWrapper, SimulateRealTimeReading, Today
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 MOCK_VALUES_FILE = P / 'mock_values.json'
 
 
-class DHT11(Sensor):
+class pH_meter(Sensor):
     def __init__(self,
                  broker_ip, broker_port,
                  parent_topic):
         super().__init__(CONFIG_FILE)
-
         self.topic = self._build_topics(parent_topic)
-        self.field_temperature = self.measurements[0]['field']
-        self.field_humidity = self.measurements[1]['field']
-        self.unit_temperature = self.measurements[0]['unit']
-        self.unit_humidity = self.measurements[1]['unit']
+        self.field = self.measurements[0]['field']
+        self.unit = self.measurements[0]['unit']
 
-        logging.debug('Creating DHT11 publisher: %s' % self.topic)
+        logging.debug('Creating pH meter publisher: %s' % self.topic)
         self.publisher = CustomPublisher(client_id=self.device_id, topic=self.topic,
                                          broker=broker_ip, port=broker_port)
 
     def start(self):
-        # self.publisher_temperature.start()
         self.publisher.start()
 
     def stop(self):
-        # self.publisher_temperature.stop()
         self.publisher.stop()
 
     def _get_last_measurement(self):
         message = {
-            self.field_temperature: hardware_read(self.device_pin),
-            self.field_humidity: hardware_read(self.device_pin),
+            self.field: hardware_read(self.device_pin),
         }
         return message
 
@@ -51,7 +44,7 @@ class DHT11(Sensor):
             time.sleep(2)
 
 
-class DHT11sim(DHT11):
+class pH_meter_sim(pH_meter):
     def __init__(self,
                  broker_ip, broker_port,
                  parent_topic):
@@ -60,8 +53,7 @@ class DHT11sim(DHT11):
             parent_topic)
 
         self.sensor_simulator = SensorSimulator(MOCK_VALUES_FILE)
-        self.temperature_values = self.generate_mock_value('temperature')
-        self.humidity_values = self.generate_mock_value('humidity')
+        self.pH_values = self.generate_mock_value('pH')
 
     def custom_time_series(self, measurement_name):
         mock_values = self.sensor_simulator.measures[measurement_name]
@@ -82,11 +74,9 @@ class DHT11sim(DHT11):
         return SimulateRealTimeReading(time_series_shape, time_series_index, measurement_name)
 
     def _get_last_measurement(self):
-        temperature_value = self.temperature_values.read_last_measurement()
-        humidity_value = self.humidity_values.read_last_measurement()
+        value = self.pH_values.read_last_measurement()
         message = {
-            self.field_temperature: temperature_value,
-            self.field_humidity: humidity_value
+            self.field: round(value * 20) / 20
         }
         return message
 
