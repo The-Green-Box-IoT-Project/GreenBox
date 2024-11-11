@@ -184,6 +184,10 @@ def verify_device_ownership(device_id, username):
 
 
 def retrieve_device_association(device_id):
+    """
+    Used to retrieve the greenhouse associated to the given device.
+    Note: if device is not associated, it will return None.
+    """
     with open(DEVICES_FILE, 'r') as f:
         devices = json.load(f)
     return devices[device_id]['associated_greenhouse']

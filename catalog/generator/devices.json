@@ -3,6 +3,6 @@
     "owner": "admin",
     "associated_greenhouse": "c9f3d27c-c3d7-4cdc-95dc-30167eecc262",
     "name": "raspberry01",
-    "device_type": "dht11"
+    "device_type": "raspberry"
   }
 }
