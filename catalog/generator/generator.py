@@ -41,7 +41,8 @@ def register_greenhouse(greenhouse_id):
         greenhouses = json.load(f)
     greenhouses[greenhouse_id] = {
         'owner': None,
-        'name': None
+        'name': None,
+        'devices': []
     }
     with open(GREENHOUSES_FILE, 'w') as f:
         f.write(json.dumps(greenhouses))

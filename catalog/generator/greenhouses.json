@@ -1,6 +1,11 @@
 {
   "c9f3d27c-c3d7-4cdc-95dc-30167eecc262": {
     "owner": "admin",
-    "name": "greenhouse01"
+    "name": "greenhouse01",
+    "devices": [
+      "a95fa2ec-082b-45e5-ab42-b7b334897243",
+      "a95fa2ec-082b-45e5-ab42-b7b334897243",
+      "a95fa2ec-082b-45e5-ab42-b7b334897243"
+    ]
   }
 }

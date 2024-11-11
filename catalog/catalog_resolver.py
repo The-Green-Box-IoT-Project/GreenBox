@@ -291,11 +291,19 @@ class CatalogPutResolver:
                 'msg': 'device_not_registered',
                 'success': False
             }
+        # Device ownership verification
+        is_device_owned = catalog_interface.verify_device_ownership(device_id, username)
+        if not is_device_owned:
+            return {
+                'msg': 'device_now_owned',
+                'success': False
+            }
         # Device association verification
-        is_device_associated = catalog_interface.verify_device_ownership(device_id, username)
-        if is_device_associated:
+        device_association = catalog_interface.retrieve_device_association(device_id)
+        if device_association == greenhouse_id:
             return {
                 'msg': 'device_already_associated',
+                'additional': device_association,
                 'success': False
             }
         # Device association
