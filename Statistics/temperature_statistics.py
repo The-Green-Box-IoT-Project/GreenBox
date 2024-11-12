@@ -9,57 +9,65 @@ from data_statistics import (
 from tools.my_mqtt import MyMQTT
 
 
-class TemperatureStatistics:
+class MeasurementStatistics:
     def __init__(self, influxdb_adaptor, mqtt_client, base_topic):
         self.influxdb_adaptor = influxdb_adaptor
         self.mqtt_client = mqtt_client
         self.base_topic = base_topic  # Base topic for MQTT communication
 
-    def publish_statistics(self, measurement_name, field_name, host_name, topic_name):
+    def publish_statistics(self, measurement_name, host_name, measurement_types):
+        """
+        Publishes statistics for specified measurement types (e.g., temperature, humidity).
+        :param measurement_types: List of measurement types to process.
+        """
         while True:
-            # Get temperature data from the adaptor
-            json_data = self.influxdb_adaptor.get_json_data(
-                measurement_name, field_name, host_name, topic_name
-            )
-            data = json.loads(json_data)
+            for measurement_type in measurement_types:
+                # Construct the full topic dynamically for this measurement type
+                topic_name = f"{self.base_topic}"
 
-            # Extract temperature values
-            temperature_values = [entry['value'] for entry in data]
+                # Get measurement data from the adaptor
+                json_data = self.influxdb_adaptor.get_json_data(
+                    measurement_name, measurement_type, host_name, topic_name
+                )
+                data = json.loads(json_data)
 
-            if not temperature_values:
-                print("No temperature data available.")
-                time.sleep(60)
-                continue  # Skip iteration if no data
+                # Extract measurement values
+                measurement_values = [entry['value'] for entry in data]
 
-            # Remove outliers
-            cleaned_temperatures = remove_outliers(temperature_values)
+                if not measurement_values:
+                    print(f"No {measurement_type} data available.")
+                    continue  # Skip to next measurement type
 
-            # Calculate statistics
-            variance, stddev = calculate_variance_stddev(cleaned_temperatures)
-            slope = linear_trend(cleaned_temperatures)
-            current_stats = calculate_statistics(cleaned_temperatures)
+                # Remove outliers
+                cleaned_values = remove_outliers(measurement_values)
 
-            if current_stats:
-                # Prepare statistics for publication
-                timestamp = time.time()
-                stats_to_publish = {
-                    "timestamp": timestamp,
-                    "mean_temperature": current_stats["mean"],
-                    "min_temperature": current_stats["min"],
-                    "max_temperature": current_stats["max"],
-                    "variance": variance,
-                    "stddev": stddev,
-                    "slope_of_trend": slope
-                }
+                # Calculate statistics
+                variance, stddev = calculate_variance_stddev(cleaned_values)
+                slope = linear_trend(cleaned_values)
+                current_stats = calculate_statistics(cleaned_values)
 
-                # **Construct the statistics topic dynamically**
-                stats_topic = f"{self.base_topic}/statistics"
+                if current_stats:
+                    # Prepare statistics for publication
+                    timestamp = time.time()
+                    stats_to_publish = {
+                        "timestamp": timestamp,
+                        f"mean_{measurement_type}": current_stats["mean"],
+                        f"min_{measurement_type}": current_stats["min"],
+                        f"max_{measurement_type}": current_stats["max"],
+                        "variance": variance,
+                        "stddev": stddev,
+                        "slope_of_trend": slope
+                    }
 
-                # Publish statistics over MQTT
-                self.mqtt_client.myPublish(stats_topic, stats_to_publish)
+                    # Construct the statistics topic dynamically
+                    stats_topic = f"{self.base_topic}/{measurement_type}/statistics"
 
-                # Write statistics to InfluxDB
-                self.write_to_influxdb(stats_to_publish, topic_name)
+                    # Publish statistics over MQTT
+                    self.mqtt_client.myPublish(stats_topic, stats_to_publish)
+                    print(f"[INFO] Published {measurement_type} statistics to {stats_topic}")
+
+                    # Write statistics to InfluxDB
+                    self.write_to_influxdb(stats_to_publish, topic_name)
 
             # Wait before republishing statistics
             time.sleep(60)
@@ -67,25 +75,20 @@ class TemperatureStatistics:
     def write_to_influxdb(self, stats, topic):
         """Write statistics to InfluxDB."""
         self.influxdb_adaptor.write_data(
-            measurement_name="temperature_statistics",
+            measurement_name="measurement_statistics",
             tags={
                 "host": "MacBook-Pro-di-luca-3.local",
                 "topic": topic  # Use the dynamic topic
             },
             fields={
-                "mean_temperature": stats["mean_temperature"],
-                "min_temperature": stats["min_temperature"],
-                "max_temperature": stats["max_temperature"],
-                "variance": stats["variance"],
-                "stddev": stats["stddev"],
-                "slope_of_trend": stats["slope_of_trend"]
+                key: value for key, value in stats.items() if key != "timestamp"
             },
             timestamp=int(stats["timestamp"] * 1000)  # Timestamp in milliseconds
         )
 
 
-
 if __name__ == "__main__":
+
     # Load environment variables from .env (optional)
     influxdb_adaptor = InfluxDBAdaptor(
         bucket=os.environ.get("INFLUXDB_BUCKET"),
@@ -94,7 +97,7 @@ if __name__ == "__main__":
         url=os.environ.get("INFLUXDB_URL")
     )
 
-    mqtt_client = MyMQTT(clientID="TemperatureStatsPublisher", broker="localhost", port=1883)
+    mqtt_client = MyMQTT(clientID="MeasurementStatsPublisher", broker="localhost", port=1883)
     mqtt_client.start()
 
     # Define identifiers for dynamic topic construction
@@ -102,21 +105,27 @@ if __name__ == "__main__":
     greenhouse_id = "greenhouse1"
     raspberry_id = "rb01"
     sensor_id = "dht11"
-    measurement_type = "temperature"
 
     # Construct the base topic dynamically
-    base_topic = f"/{client_id}/{greenhouse_id}/{raspberry_id}/{sensor_id}/{measurement_type}"
+    base_topic = f"/{client_id}/{greenhouse_id}/{raspberry_id}/measurements/{sensor_id}"
 
-    temperature_statistics = TemperatureStatistics(
+    # Instantiate the MeasurementStatistics class
+    measurement_statistics = MeasurementStatistics(
         influxdb_adaptor=influxdb_adaptor,
         mqtt_client=mqtt_client,
         base_topic=base_topic
     )
 
-    temperature_statistics.publish_statistics(
-        measurement_name="mqtt_consumer",
-        field_name="temperature",
-        host_name="MacBook-Pro-di-luca-3.local",
-        topic_name=base_topic
-    )
+    # List of measurement types to process
+    measurement_types = ["temperature", "humidity"]
 
+    # Publish statistics for the measurement types
+    try:
+        measurement_statistics.publish_statistics(
+            measurement_name="mqtt_consumer",
+            host_name="MacBook-Pro-di-luca-3.local",
+            measurement_types=measurement_types
+        )
+    except KeyboardInterrupt:
+        print("Interruption received, stopping the statistics publisher.")
+        mqtt_client.stop()
