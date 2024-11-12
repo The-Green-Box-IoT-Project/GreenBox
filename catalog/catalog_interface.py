@@ -110,6 +110,7 @@ def retrieve_username_by_token(token):
     return None
 
 
+# Existence
 def verify_greenhouse_existence(greenhouse_id):
     """
     Used to verify that a specified greenhouse is registered. This is
@@ -122,17 +123,66 @@ def verify_greenhouse_existence(greenhouse_id):
     return False
 
 
-def verify_greenhouse_ownership(greenhouse_id, username):
+def verify_device_existence(device_id):
     """
-    Used to verify if the user owns a specific greenhouse.
+    Used to verify that a specified device is registered. This is
+    to prevent that an user can associate a device that is not registered.
     """
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    if greenhouses[greenhouse_id]['owner'] == username:
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    if device_id in devices:
         return True
     return False
 
 
+# Ownership
+def retrieve_greenhouse_ownership(greenhouse_id):
+    """
+    Used to retrieve the owner of a specific greenhouse
+    """
+    with open(GREENHOUSES_FILE, 'r') as f:
+        greenhouses = json.load(f)
+    return greenhouses[greenhouse_id]['owner']
+
+
+def retrieve_device_ownership(device_id):
+    """
+    Used to retrieve the owner of a specific device
+    """
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    return devices[device_id]['owner']
+
+
+def verify_greenhouse_ownership(greenhouse_id, username):
+    """
+    Used to verify if a greenhouse is owned by the user.
+    """
+    return retrieve_greenhouse_ownership(greenhouse_id) == username
+
+
+def verify_device_ownership(device_id, username):
+    """
+    Used to verify if a device is owned by the user.
+    """
+    return retrieve_device_ownership(device_id) == username
+
+
+def is_greenhouse_available(greenhouse_id):
+    """
+    Returns true if a greenhouse is available.
+    """
+    return retrieve_greenhouse_ownership(greenhouse_id) is None
+
+
+def is_device_available(device_id):
+    """
+    Returns true if a device is available and ready to be associated to a greenhouse.
+    """
+    return retrieve_device_ownership(device_id) is None
+
+
+# Retrieving
 def retrieve_greenhouses(username):
     """
     Used to retrieve all the greenhouses owned by the given user.
@@ -142,6 +192,19 @@ def retrieve_greenhouses(username):
     return users[username]['greenhouses']
 
 
+def retrieve_devices(greenhouse_id):
+    """
+    Used to retrieve all the devices registered under the given
+    greenhouse.
+    """
+    with open(GREENHOUSES_FILE, 'r') as f:
+        greenhouses = json.load(f)
+    if greenhouse_id in greenhouses:
+        return greenhouses[greenhouse_id]['devices']
+    return None
+
+
+# Association
 def associate_greenhouse(greenhouse_id, greenhouse_name, username):
     """
     Used to associate a greenhouse to a user.
@@ -159,50 +222,6 @@ def associate_greenhouse(greenhouse_id, greenhouse_name, username):
     greenhouses[greenhouse_id]['name'] = greenhouse_name
     with open(GREENHOUSES_FILE, 'w') as f:
         f.write(json.dumps(greenhouses))
-
-
-def verify_device_existence(device_id):
-    """
-    Used to verify that a specified device is registered. This is
-    to prevent that an user can associate a device that is not registered.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    if device_id in devices:
-        return True
-    return False
-
-
-def verify_device_ownership(device_id, username):
-    """
-    Used to verify if the user owns a specific device.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    return devices[device_id]['owner'] == username
-
-
-
-def retrieve_device_association(device_id):
-    """
-    Used to retrieve the greenhouse associated to the given device.
-    Note: if device is not associated, it will return None.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    return devices[device_id]['associated_greenhouse']
-
-
-def retrieve_devices(greenhouse_id):
-    """
-    Used to retrieve all the devices registered under the given
-    greenhouse.
-    """
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    if greenhouse_id in greenhouses:
-        return greenhouses[greenhouse_id]['devices']
-    return None
 
 
 def associate_device(device_id, greenhouse_id, device_name, username):
@@ -225,5 +244,11 @@ def associate_device(device_id, greenhouse_id, device_name, username):
         f.write(json.dumps(devices))
 
 
-if __name__ == '__main__':
-    init()
+def retrieve_device_association(device_id):
+    """
+    Used to retrieve the greenhouse associated to the given device.
+    Note: if device is not associated, it will return None.
+    """
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    return devices[device_id]['associated_greenhouse']

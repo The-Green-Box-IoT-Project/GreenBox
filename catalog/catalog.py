@@ -3,9 +3,12 @@ from pathlib import Path
 
 import cherrypy
 
+import catalog_interface
 from catalog_dispatcher import CatalogGetDispatcher, CatalogPostDispatcher, CatalogPutDispatcher, \
     CatalogDeleteDispatcher
 from catalog_resolver import CatalogGetResolver, CatalogPostResolver, CatalogPutResolver, CatalogDeleteResolver
+
+catalog_interface.init()
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
