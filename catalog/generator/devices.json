@@ -1,8 +1,1 @@
-{
-  "a95fa2ec-082b-45e5-ab42-b7b334897243": {
-    "owner": "admin",
-    "associated_greenhouse": "c9f3d27c-c3d7-4cdc-95dc-30167eecc262",
-    "name": "raspberry01",
-    "device_type": "raspberry"
-  }
-}
+{"d01": {"owner": "admin", "associated_greenhouse": "gh01", "name": "Raspberry", "device_type": "raspberry"}, "d02": {"owner": "admin", "associated_greenhouse": "gh01", "name": "Raspberry", "device_type": "raspberry"}, "d03": {"owner": "senpai", "associated_greenhouse": "gh02", "name": "Culo", "device_type": "fan01"}, "d05": {"owner": null, "associated_greenhouse": null, "name": null, "device_type": "fan01"}}

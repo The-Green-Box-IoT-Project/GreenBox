@@ -62,13 +62,21 @@ class CatalogGetResolver:
         the catalog and obtain its resource catalog (i.e. id of the
         greenhouse it is associated with). When called before the user
         has successfully registered the device, it does not return
-        anything.
+        anything useful.
         path: device_join
         query: device_id
         """
         device_id = query['device_id']
-        # TODO
-        return None
+        if not catalog_interface.verify_device_existence(device_id):
+            raise cherrypy.HTTPError(status=404)
+        if catalog_interface.is_device_available(device_id):
+            return {'msg': 'device_not_associated'}
+        broker_ip, broker_port = catalog_interface.retrieve_broker()
+        return {
+            'broker_ip': broker_ip,
+            'broker_port': broker_port,
+            'greenhouse_id': catalog_interface.retrieve_device_association(device_id)
+        }
 
 
 class CatalogPostResolver:
@@ -99,6 +107,8 @@ class CatalogPostResolver:
         path: register/greenhouse
         query: greenhouse_id, token
         """
+        if 'token' not in query:
+            raise cherrypy.HTTPError(status=401)
         token = query['token']
         if token != admin_token:
             raise cherrypy.HTTPError(status=403)
@@ -116,6 +126,8 @@ class CatalogPostResolver:
         path: register/device
         query: device_id, device_type, token
         """
+        if 'token' not in query:
+            raise cherrypy.HTTPError(status=401)
         token = query['token']
         if token != admin_token:
             raise cherrypy.HTTPError(status=403)
@@ -217,6 +229,8 @@ class CatalogPutResolver:
         path: associate/greenhouse
         query: greenhouse_id, greenhouse_name, token
         """
+        if 'token' not in query:
+            raise cherrypy.HTTPError(status=401)
         token = query['token']
         greenhouse_id = query['greenhouse_id']
         greenhouse_name = query['greenhouse_name']
@@ -227,19 +241,26 @@ class CatalogPutResolver:
                 'msg': 'invalid_token',
                 'success': False
             }
+        username = catalog_interface.retrieve_username_by_token(token)
         # Greenhouse registration verification
         is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
         if not is_greenhouse_registered:
             return {
-                'msg': 'greenhouse_not_registered',
+                'msg': 'greenhouse_not_available',
                 'success': False
             }
-        # Greenhouse association verification
-        username = catalog_interface.retrieve_username_by_token(token)
-        is_greenhouse_associated = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
-        if is_greenhouse_associated:
+        # Greenhouse ownership verification
+        is_greenhouse_owned = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
+        if is_greenhouse_owned:
             return {
                 'msg': 'greenhouse_already_associated',
+                'success': False
+            }
+        # Greenhouse availability verification
+        is_greenhouse_available = catalog_interface.is_greenhouse_available(greenhouse_id)
+        if not is_greenhouse_available:
+            return {
+                'msg': 'greenhouse_not_available',
                 'success': False
             }
         # Greenhouse association
@@ -257,6 +278,8 @@ class CatalogPutResolver:
         path: associate/device
         query: device_id, device_name, greenhouse_id, token
         """
+        if 'token' not in query:
+            raise cherrypy.HTTPError(status=401)
         token = query['token']
         device_id = query['device_id']
         device_name = query['device_name']
@@ -269,41 +292,41 @@ class CatalogPutResolver:
                 'msg': 'invalid_token',
                 'success': False
             }
-        # Greenhouse registration verification
-        is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
-        if not is_greenhouse_registered:
-            return {
-                'msg': 'greenhouse_not_registered',
-                'success': False
-            }
-        # Greenhouse association verification
         username = catalog_interface.retrieve_username_by_token(token)
-        is_greenhouse_associated = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
-        if not is_greenhouse_associated:
-            return {
-                'msg': 'greenhouse_not_associated',
-                'success': False
-            }
         # Device registration verification
         is_device_registered = catalog_interface.verify_device_existence(device_id)
         if not is_device_registered:
             return {
-                'msg': 'device_not_registered',
+                'msg': 'device_not_available',
                 'success': False
             }
         # Device ownership verification
         is_device_owned = catalog_interface.verify_device_ownership(device_id, username)
-        if not is_device_owned:
-            return {
-                'msg': 'device_now_owned',
-                'success': False
-            }
-        # Device association verification
-        device_association = catalog_interface.retrieve_device_association(device_id)
-        if device_association == greenhouse_id:
+        if is_device_owned:
             return {
                 'msg': 'device_already_associated',
-                'additional': device_association,
+                'additional': catalog_interface.retrieve_device_association(device_id),
+                'success': False
+            }
+        # Device availability verification
+        is_device_available = catalog_interface.is_device_available(device_id)
+        if not is_device_available:
+            return {
+                'msg': 'device_not_available',
+                'success': False
+            }
+        # Greenhouse registration verification
+        is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
+        if not is_greenhouse_registered:
+            return {
+                'msg': 'greenhouse_not_available',
+                'success': False
+            }
+        # Greenhouse ownership verification
+        is_greenhouse_owned = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
+        if not is_greenhouse_owned:
+            return {
+                'msg': 'greenhouse_not_available',
                 'success': False
             }
         # Device association

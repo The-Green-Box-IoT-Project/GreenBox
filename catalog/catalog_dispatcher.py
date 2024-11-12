@@ -51,8 +51,6 @@ class CatalogGetDispatcher:
             return False
         if path[0] != 'generate_id':
             return False
-        if not 'token' in query:
-            return False
         return True
 
     @staticmethod
@@ -105,7 +103,7 @@ class CatalogPostDispatcher:
             return False
         if path[1] != 'greenhouse':
             return False
-        if not {'greenhouse_id', 'token'}.issubset(query):
+        if 'greenhouse_id' not in query:
             return False
         return True
 
@@ -124,7 +122,7 @@ class CatalogPostDispatcher:
             return False
         if path[1] != 'device':
             return False
-        if not {'device_id', 'device_type', 'token'}.issubset(query):
+        if not {'device_id', 'device_type'}.issubset(query):
             return False
         return True
 
@@ -156,9 +154,9 @@ class CatalogPostDispatcher:
             return False
         if path[0] != 'login':
             return False
-        if {'username', 'password'}.issubset(query):
-            return True
-        return False
+        if not {'username', 'password'}.issubset(query):
+            return False
+        return True
 
     @staticmethod
     def _is_token_login_request(path, query):
@@ -172,9 +170,9 @@ class CatalogPostDispatcher:
             return False
         if path[0] != 'login':
             return False
-        if 'token' in query:
-            return True
-        return False
+        if not 'token' in query:
+            return False
+        return True
 
 
 class CatalogPutDispatcher:
@@ -199,7 +197,7 @@ class CatalogPutDispatcher:
             return False
         if path[1] != 'greenhouse':
             return False
-        if not {'greenhouse_id', 'greenhouse_name', 'token'}.issubset(query):
+        if not {'greenhouse_id', 'greenhouse_name'}.issubset(query):
             return False
         return True
 
@@ -217,7 +215,7 @@ class CatalogPutDispatcher:
             return False
         if path[1] != 'device':
             return False
-        if not {'device_id', 'greenhouse_id', 'token'}.issubset(query):
+        if not {'device_id', 'greenhouse_id'}.issubset(query):
             return False
         return True
 
