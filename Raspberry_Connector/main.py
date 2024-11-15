@@ -28,10 +28,9 @@ ph = pH_meter(broker_ip=raspberry.broker_ip, broker_port=raspberry.broker_port, 
 grodan = GrodanSens(broker_ip=raspberry.broker_ip, broker_port=raspberry.broker_port, parent_topic=raspberry.parent_topic)
 
 
-if __name__ == "__main__":
-    with ThreadPoolExecutor(max_workers=4) as executor:  # max_workers must be equal to the number of publication tasks
-        # Sends publication functions as tasks to the thread pool
-        executor.submit(dht11.read_value)
-        executor.submit(par.read_value)
-        executor.submit(ph.read_value)
-        executor.submit(grodan.read_value)
+with ThreadPoolExecutor(max_workers=4) as executor:  # max_workers must be equal to the number of publication tasks
+    # Sends publication functions as tasks to the thread pool
+    executor.submit(dht11.read_value)
+    executor.submit(par.read_value)
+    executor.submit(ph.read_value)
+    executor.submit(grodan.read_value)

@@ -1,7 +1,10 @@
 import os
 import influxdb_client
-import datetime
 from dotenv import load_dotenv
+from pprint import pprint
+from datetime import datetime, timedelta
+
+from utils.tools import convert_data_format
 
 load_dotenv()
 
@@ -12,6 +15,7 @@ url = os.getenv('INFLUXDB_URL')
 
 
 class InfluxDBReader:
+    # todo: valuta di spezzarla in due classi basso-alto livello (connection and query builder).
     def __init__(self, bucket, org, token, url):
         self.bucket = bucket
         self.org = org
@@ -36,8 +40,17 @@ class InfluxDBReader:
         self.query += f'\n  |> range(start: -{minutes}m)'
 
     def _query_from_to_timestamp(self, start, end):
-        start_time = start.isoformat() + 'Z'
-        end_time = end.isoformat() + 'Z'
+
+        # Adjust for the time difference between local time and UTC by subtracting one hour.
+        # This ensures that the query matches the UTC-stored data in InfluxDB.
+        start = start - timedelta(hours=1)
+        end = end - timedelta(hours=1)
+
+        # Convert the adjusted start and end times to ISO 8601 format with millisecond precision and a 'Z' suffix for UTC.
+        start_time = start.isoformat(timespec='milliseconds') + 'Z'
+        end_time = end.isoformat(timespec='milliseconds') + 'Z'
+
+        # Append the range filter to the query, using the adjusted start and end times
         self.query += f'\n  |> range(start: {start_time}, stop: {end_time})'
 
     def _query_filter_measurement(self, measurement_name):
@@ -72,7 +85,7 @@ class InfluxDBReader:
                 result[record.get_field()][record.get_time().isoformat()] = record.get_value()
         return result
 
-    def compose_query_last_minutes(
+    def query_last_minutes(
             self, minutes, measurement_name, field_name,
             host_name, topic_name, window_period, yield_name
     ):
@@ -85,7 +98,7 @@ class InfluxDBReader:
         self._query_aggregate_window(window_period)
         self._query_yield(yield_name)
 
-    def compose_query_timestamps(
+    def query_timestamps(
             self, start_time, end_time, measurement_name, field_name,
             host_name, topic_name, window_period, yield_name
     ):
@@ -100,31 +113,44 @@ class InfluxDBReader:
 
 
 if __name__ == "__main__":
-    # Creazione di un'istanza di InfluxDBReader
+    # Initialize an instance of InfluxDBReader with connection parameters
     influxdb = InfluxDBReader(bucket, org, token, url)
 
-    # Definizione dei parametri per la query
-    start_time = datetime.datetime(2024, 4, 16, 17, 27, 0)
-    end_time = datetime.datetime(2024, 4, 24, 17, 36, 0)
-    last_minutes = 5
+    # Define the time range for the query
+    start_time = datetime(2024, 11, 15, 20, 30, 0)  # Start time in local time
+    end_time = datetime(2024, 11, 15, 20, 39, 0)    # End time in local time
+    last_minutes = 5  # Alternative query parameter for the last X minutes
 
+    # Define additional query parameters in a dictionary for flexibility
     variables_dict = {
         "measurement_name": "mqtt_consumer",
-        "field_name": "temperature",
+        "field_name": "humidity",
         "host_name": "marzio-windows",
-        "topic_name": "sensor/data",
-        "window_period": "1m",
-        "yield_name": "mean"
-    }
+        "topic_name": "/01f20b9e-6df4-43df-9fd6-c1376bb2ba41/greenhouse1/rb01/measurements/dht11",
+        "window_period": "1m",  # Aggregation period of 1 minute
+        "yield_name": "mean"    # Name for the query yield
+    }  # todo: questo deve essere compilato automaticamente in base all'utente
 
+    # Connect to InfluxDB
     influxdb.connect_client()
-    # Composizione della query finale
 
-    influxdb.compose_query_timestamps(start_time, end_time, **variables_dict)
-    # influxdb.compose_query_last_minutes(last_minutes, **variables_dict)
-    print(influxdb.query)
+    # Compose the query for the last X minutes or for a specific time range
+    # Uncomment one of the following lines to choose which query to run:
 
-    # Esecuzione della query
+    # Query for a specific time range using start and end times
+    influxdb.query_timestamps(start_time, end_time, **variables_dict)
+
+    # Query for the most recent data in the last specified minutes
+    # influxdb.query_last_minutes(last_minutes, **variables_dict)
+    print(influxdb.query)  # Print the generated query for debugging
+
+    # Execute the query
     influxdb.execute_query()
+
+    # Retrieve and print the results
     result = influxdb.get_result()
-    print(result)
+    pprint(result)
+
+    # Convert the raw data format for easier consumption (e.g., for JSON output)
+    formatted_result = convert_data_format(result)
+    pprint(formatted_result)
