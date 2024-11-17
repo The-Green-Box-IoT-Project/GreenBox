@@ -1,17 +1,1 @@
-{
-  "gh01": {
-    "owner": "admin",
-    "name": "Balcone",
-    "devices": [
-      "d01",
-      "d02"
-    ]
-  },
-  "gh02": {
-    "owner": "senpai",
-    "name": "Balconeaaaaaa",
-    "devices": [
-      "d03"
-    ]
-  }
-}
+{"gh01": {"owner": "senpai", "name": "Balcone", "devices": ["rb01"]}, "gh02": {"owner": null, "name": null, "devices": []}}

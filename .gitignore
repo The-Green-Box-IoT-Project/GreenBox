@@ -8,4 +8,8 @@ logs/
 *.pyc
 /mock_data_final.json
 /catalog/.env
-
+/catalog/services.json
+/catalog/sessions.json
+/catalog/users.json
+/catalog/generator/devices.json
+/catalog/generator/greenhouses.json
