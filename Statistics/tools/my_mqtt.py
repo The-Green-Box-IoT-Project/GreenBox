@@ -29,9 +29,11 @@ class MyMQTT:
         if session_present:
             print("Session present.")
 
-        if reason_code == 0:
+        # Stampa il messaggio solo se la connessione è nuova
+        if reason_code == 0 and not hasattr(self, "_connected"):
             print("Connected to %s with success." % self.broker)
-        else:
+            self._connected = True
+        elif reason_code != 0:
             print("Connection failed with reason code: %d" % reason_code)
 
     def myOnMessageReceived(self, client, userdata, message):

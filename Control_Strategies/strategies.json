@@ -1,0 +1,144 @@
+{
+    "clients": [
+        {
+            "client_name": "Cliente1",
+            "client_id": "01f20b9e-6df4-43df-9fd6-c1376bb2ba41",
+            "greenhouse_id": "greenhouse1",
+            "raspberry_id": "rb01",
+            "control_strategy": "BasicControlStrategy",
+            "actuators": [
+                {
+                    "name": "ventilation_system",
+                    "thresholds": {
+                        "temperature": {
+                            "min": 19,
+                            "max": 30,
+                            "stddev_max": 100,
+                            "slope_threshold": 10
+                        },
+                        "humidity": {
+                            "max": 100,
+                            "stddev_max": 100,
+                            "slope_threshold": 10
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 5
+                },
+                {
+                    "name": "illumination_system",
+                    "thresholds": {
+                        "light": {
+                            "min": 50,
+                            "stddev_max": 100,
+                            "slope_threshold": 10
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 3
+                },
+                {
+                    "name": "heating_system",
+                    "thresholds": {
+                        "temperature": {
+                            "min": 18,
+                            "max": 30,
+                            "stddev_max": 1.5,
+                            "slope_threshold": 10
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 4
+                },
+                {
+                    "name": "irrigation_system",
+                    "thresholds": {
+                        "soil_humidity": {
+                            "min": 10,
+                            "max": 100,
+                            "stddev_max": 50,
+                            "slope_threshold": 10
+                        },
+                        "pH": {
+                            "min": 4,
+                            "max": 10,
+                            "stddev_max": 50
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 6
+                }
+            ]
+        },
+        {
+            "client_name": "Cliente2",
+            "client_id": "02a30c9e-7df5-53ef-8fd7-d1387cc3ba42",
+            "greenhouse_id": "greenhouse2",
+            "raspberry_id": "rb02",
+            "control_strategy": "AdvancedControlStrategy",
+            "actuators": [
+                {
+                    "name": "ventilation_system",
+                    "thresholds": {
+                        "temperature": {
+                            "min": 20,
+                            "max": 32,
+                            "stddev_max": 90,
+                            "slope_threshold": 12
+                        },
+                        "humidity": {
+                            "max": 95,
+                            "stddev_max": 95,
+                            "slope_threshold": 12
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 5
+                },
+                {
+                    "name": "illumination_system",
+                    "thresholds": {
+                        "light": {
+                            "min": 60,
+                            "stddev_max": 90,
+                            "slope_threshold": 12
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 3
+                },
+                {
+                    "name": "heating_system",
+                    "thresholds": {
+                        "temperature": {
+                            "min": 17,
+                            "max": 28,
+                            "stddev_max": 1.7,
+                            "slope_threshold": 12
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 4
+                },
+                {
+                    "name": "irrigation_system",
+                    "thresholds": {
+                        "soil_humidity": {
+                            "min": 12,
+                            "max": 95,
+                            "stddev_max": 45,
+                            "slope_threshold": 12
+                        },
+                        "pH": {
+                            "min": 4.5,
+                            "max": 9.5,
+                            "stddev_max": 45
+                        }
+                    },
+                    "activation": false,
+                    "deactivation_counter": 6
+                }
+            ]
+        }
+    ]
+}
