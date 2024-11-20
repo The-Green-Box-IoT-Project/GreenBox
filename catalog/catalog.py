@@ -59,7 +59,9 @@ if __name__ == '__main__':
     catalog_ip, catalog_port = retrieve_endpoint()
     socket_config = {
         'server.socket_host': catalog_ip,
-        'server.socket_port': int(catalog_port)
+        'server.socket_port': int(catalog_port),
+        'tools.response_headers.on': True,
+        'tools.response_headers.headers': [('Access-Control-Allow-Origin', '*')],
     }
     cherrypy.tree.mount(Catalog(), '/', config)
     cherrypy.config.update(socket_config)

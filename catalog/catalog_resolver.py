@@ -196,6 +196,7 @@ class CatalogPostResolver:
         """
         token = query['token']
         is_token_valid = catalog_interface.verify_token(token)
+        username = None
         if is_token_valid:
             username = catalog_interface.retrieve_username_by_token(token)
             greenhouses = catalog_interface.retrieve_greenhouses(username)
@@ -204,6 +205,7 @@ class CatalogPostResolver:
         response = {
             'token': token,
             'valid': is_token_valid,
+            'username': username,
             'greenhouses': greenhouses
         }
         return response
