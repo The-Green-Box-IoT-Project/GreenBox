@@ -13,7 +13,7 @@ admin_token = os.getenv('ADMIN_TOKEN')
 
 class CatalogGetResolver:
     @staticmethod
-    def resolve(request: CatalogRequest, path, query):
+    def resolve(request: CatalogRequest, path, query, headers):
         response = None
         match request:
             case CatalogRequest.NOT_FOUND:
@@ -24,6 +24,8 @@ class CatalogGetResolver:
                 response = CatalogGetResolver._generate_id(query)
             case CatalogRequest.DEVICE_JOIN:
                 response = CatalogGetResolver._device_join(query)
+            case CatalogRequest.RETRIEVE_GREENHOUSES:
+                response = CatalogGetResolver._retrieve_greenhouses(headers)
         return response
 
     @staticmethod
@@ -78,10 +80,36 @@ class CatalogGetResolver:
             'greenhouse_id': catalog_interface.retrieve_device_association(device_id)
         }
 
+    @staticmethod
+    def _retrieve_greenhouses(headers):
+        """
+        Called by a user that wants to retrieve its set of greenhouses.
+        path: retrieve/greenhouses
+        query: -
+        headers: token
+        """
+        if 'token' not in headers:
+            raise cherrypy.HTTPError(status=401)
+        token = headers['token']
+        is_token_valid = catalog_interface.verify_token(token)
+        username = None
+        if is_token_valid:
+            username = catalog_interface.retrieve_username_by_token(token)
+            greenhouses = catalog_interface.retrieve_greenhouses(username)
+        else:
+            greenhouses = None
+        response = {
+            'token': token,
+            'valid': is_token_valid,
+            'username': username,
+            'greenhouses': greenhouses
+        }
+        return response
+
 
 class CatalogPostResolver:
     @staticmethod
-    def resolve(request: CatalogRequest, path, query):
+    def resolve(request: CatalogRequest, path, query, headers):
         response = None
         match request:
             case CatalogRequest.NOT_FOUND:
@@ -94,8 +122,6 @@ class CatalogPostResolver:
                 response = CatalogPostResolver._sign_up(query)
             case CatalogRequest.LOGIN:
                 response = CatalogPostResolver._login(query)
-            case CatalogRequest.TOKEN_LOGIN:
-                response = CatalogPostResolver._token_login(query)
         return response
 
     @staticmethod
@@ -186,34 +212,10 @@ class CatalogPostResolver:
         }
         return response
 
-    @staticmethod
-    def _token_login(query):
-        """
-        Called by a user that wants to log into the system using a previous
-        session token. Its set of resources will be given to it.
-        path: login
-        query: token
-        """
-        token = query['token']
-        is_token_valid = catalog_interface.verify_token(token)
-        username = None
-        if is_token_valid:
-            username = catalog_interface.retrieve_username_by_token(token)
-            greenhouses = catalog_interface.retrieve_greenhouses(username)
-        else:
-            greenhouses = None
-        response = {
-            'token': token,
-            'valid': is_token_valid,
-            'username': username,
-            'greenhouses': greenhouses
-        }
-        return response
-
 
 class CatalogPutResolver:
     @staticmethod
-    def resolve(request: CatalogRequest, path, query):
+    def resolve(request: CatalogRequest, path, query, headers):
         response = None
         match request:
             case CatalogRequest.NOT_FOUND:
@@ -341,5 +343,5 @@ class CatalogPutResolver:
 
 class CatalogDeleteResolver:
     @staticmethod
-    def resolve(request: CatalogRequest, path, query):
+    def resolve(request: CatalogRequest, path, query, headers):
         pass

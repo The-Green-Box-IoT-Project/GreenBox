@@ -7,9 +7,12 @@ class CatalogRequest(Enum):
     GENERATE_ID = auto(),
     REGISTER_NEW_GREENHOUSE = auto(),
     REGISTER_NEW_DEVICE = auto(),
+    RETRIEVE_GREENHOUSES = auto(),
+    RETRIEVE_DEVICES = auto(),
     SIGN_UP = auto(),
+    VALIDATE_TOKEN = auto(),
     LOGIN = auto(),
-    TOKEN_LOGIN = auto(),
+    # TOKEN_LOGIN = auto(),
     ASSOCIATE_GREENHOUSE = auto(),
     ASSOCIATE_DEVICE = auto(),
     DEVICE_JOIN = auto(),
@@ -24,6 +27,8 @@ class CatalogGetDispatcher:
             return CatalogRequest.GENERATE_ID
         if CatalogGetDispatcher._is_device_join_request(path, query):
             return CatalogRequest.DEVICE_JOIN
+        if CatalogGetDispatcher._is_retrieve_greenhouses_request(path, query):
+            return CatalogRequest.RETRIEVE_GREENHOUSES
         return CatalogRequest.NOT_FOUND
 
     @staticmethod
@@ -64,13 +69,29 @@ class CatalogGetDispatcher:
         path: device_join
         query: device_id
         """
-        if len(path) == 0:
+        if len(path) != 1:
             return False
         if path[0] != 'device_join':
             return False
         if not 'device_id' in query:
             return False
         return True
+
+    @staticmethod
+    def _is_retrieve_greenhouses_request(path, query):
+        """
+        # TODO explaination
+        path: retrieve/greenhouses
+        query: -
+        """
+        if len(path) != 2:
+            return False
+        if path[0] != 'retrieve':
+            return False
+        if path[1] != 'greenhouses':
+            return False
+        return True
+
 
 
 class CatalogPostDispatcher:
@@ -84,8 +105,8 @@ class CatalogPostDispatcher:
             return CatalogRequest.SIGN_UP
         if CatalogPostDispatcher._is_login_request(path, query):
             return CatalogRequest.LOGIN
-        if CatalogPostDispatcher._is_token_login_request(path, query):
-            return CatalogRequest.TOKEN_LOGIN
+        # if CatalogPostDispatcher._is_token_login_request(path, query):
+        #     return CatalogRequest.TOKEN_LOGIN
         return CatalogRequest.NOT_FOUND
 
     @staticmethod

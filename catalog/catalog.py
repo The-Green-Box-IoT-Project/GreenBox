@@ -30,22 +30,26 @@ class Catalog:
 
     def GET(self, *path, **query):
         request = CatalogGetDispatcher.dispatch(path, query)
-        response = CatalogGetResolver.resolve(request, path, query)
+        headers = cherrypy.request.headers
+        response = CatalogGetResolver.resolve(request, path, query, headers)
         return json.dumps(response)
 
     def POST(self, *path, **query):
         request = CatalogPostDispatcher.dispatch(path, query)
-        response = CatalogPostResolver.resolve(request, path, query)
+        headers = cherrypy.request.headers
+        response = CatalogPostResolver.resolve(request, path, query, headers)
         return json.dumps(response)
 
     def PUT(self, *path, **query):
         request = CatalogPutDispatcher.dispatch(path, query)
-        response = CatalogPutResolver.resolve(request, path, query)
+        headers = cherrypy.request.headers
+        response = CatalogPutResolver.resolve(request, path, query, headers)
         return json.dumps(response)
 
     def DELETE(self, *path, **query):
         request = CatalogDeleteDispatcher.dispatch(path, query)
-        response = CatalogDeleteResolver.resolve(request, path, query)
+        headers = cherrypy.request.headers
+        response = CatalogDeleteResolver.resolve(request, path, query, headers)
         return json.dumps(response)
 
 
