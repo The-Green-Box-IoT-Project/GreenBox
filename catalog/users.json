@@ -1,14 +1,1 @@
-{
-  "admin": {
-    "password": "admin",
-    "greenhouses": [
-      "c9f3d27c-c3d7-4cdc-95dc-30167eecc262"
-    ]
-  },
-  "senpai": {
-    "password": "admin",
-    "greenhouses": [
-      "gh01"
-    ]
-  }
-}
+{"admin": {"password": "admin", "greenhouses": []}, "senpai": {"password": "iot", "greenhouses": ["gh01"]}}
