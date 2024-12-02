@@ -186,14 +186,13 @@ class CatalogPostDispatcher:
         """
         Called by a user that wants to be registered on the system.
         path: signup
-        query: username, password, repeat_password
+        query: -
+        body: username, password, repeat_password
         auth: -
         """
         if len(path) != 1:
             return False
         if path[0] != 'signup':
-            return False
-        if not {'username', 'password', 'repeat_password'}.issubset(query):
             return False
         return True
 
@@ -210,8 +209,6 @@ class CatalogPostDispatcher:
         if len(path) != 1:
             return False
         if path[0] != 'login':
-            return False
-        if not {'username', 'password'}.issubset(query):
             return False
         return True
 

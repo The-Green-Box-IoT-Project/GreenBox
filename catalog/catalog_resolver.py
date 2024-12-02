@@ -41,7 +41,7 @@ class CatalogGetResolver:
             case CatalogGetRequest.DEVICE_JOIN:
                 return CatalogGetResolver._device_join(query, headers)
             case CatalogGetRequest.RETRIEVE_GREENHOUSES:
-                return CatalogGetResolver._retrieve_greenhouses(query, headers)
+                return CatalogGetResolver._retrieve_greenhouses(headers)
             case CatalogGetRequest.RETRIEVE_DEVICES:
                 return CatalogGetResolver._retrieve_devices(query, headers)
         raise cherrypy.HTTPError(status=400)
@@ -100,7 +100,7 @@ class CatalogGetResolver:
         }
 
     @staticmethod
-    def _retrieve_greenhouses(query, headers):
+    def _retrieve_greenhouses(headers):
         """
         Called by a user that wants to retrieve its set of greenhouses.
         path: retrieve/greenhouses
@@ -110,7 +110,10 @@ class CatalogGetResolver:
         token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
         greenhouses = catalog_interface.retrieve_greenhouses(username)
-        response = {'greenhouses': greenhouses}
+        response = {
+            'greenhouses': greenhouses,
+            'username': username
+        }
         return response
 
     @staticmethod
@@ -136,7 +139,7 @@ class CatalogGetResolver:
 
 class CatalogPostResolver:
     @staticmethod
-    def resolve(request: CatalogPostRequest, query, headers):
+    def resolve(request: CatalogPostRequest, query, body, headers):
         response = None
         match request:
             case CatalogPostRequest.NOT_FOUND:
@@ -146,9 +149,9 @@ class CatalogPostResolver:
             case CatalogPostRequest.REGISTER_NEW_DEVICE:
                 response = CatalogPostResolver._register_new_device(query, headers)
             case CatalogPostRequest.SIGN_UP:
-                response = CatalogPostResolver._sign_up(query, headers)
+                response = CatalogPostResolver._sign_up(body)
             case CatalogPostRequest.LOGIN:
-                response = CatalogPostResolver._login(query, headers)
+                response = CatalogPostResolver._login(body)
         return response
 
     @staticmethod
@@ -185,16 +188,19 @@ class CatalogPostResolver:
         return response
 
     @staticmethod
-    def _sign_up(query, headers):
+    def _sign_up(body):
         """
         Called by a user that wants to be registered on the system.
         path: signup
-        query: username, password, repeat_password
+        query: -
+        body: username, password, repeat_password
         auth: -
         """
-        username = query['username']
-        password = query['password']
-        repeat_password = query['repeat_password']
+        if not {'username', 'password', 'repeat_password'}.issubset(body):
+            raise cherrypy.HTTPError(status=400, message='missing_fields')
+        username = body['username']
+        password = body['password']
+        repeat_password = body['repeat_password']
         if password != repeat_password:
             raise cherrypy.HTTPError(status=403, message='passwords_dont_match')
         elif not catalog_interface.signup_user(username, password):
@@ -204,17 +210,20 @@ class CatalogPostResolver:
         return response
 
     @staticmethod
-    def _login(query, headers):
+    def _login(body):
         """
         Called by a user that wants to log into the system opening a new
         session. A new session (and so a new token) is initialized and
         its set of greenhouses will be given to the user.
         path: login
-        query: username, password
+        query: -
+        body: username, password
         auth: -
         """
-        username = query['username']
-        password = query['password']
+        if not {'username', 'password'}.issubset(body):
+            raise cherrypy.HTTPError(status=400, message='missing_fields')
+        username = body['username']
+        password = body['password']
         token = catalog_interface.validate_login(username, password)
         is_token_valid = catalog_interface.verify_token(token)
         if not is_token_valid:
@@ -229,7 +238,7 @@ class CatalogPostResolver:
 
 class CatalogPutResolver:
     @staticmethod
-    def resolve(request: CatalogPutRequest, query, headers):
+    def resolve(request: CatalogPutRequest, query, body, headers):
         response = None
         match request:
             case CatalogPutRequest.NOT_FOUND:

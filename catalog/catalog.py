@@ -29,27 +29,52 @@ class Catalog:
     exposed = True
 
     def GET(self, *path, **query):
-        request = CatalogGetDispatcher.dispatch(path, query)
+        # Dispatch
+        request = CatalogGetDispatcher.dispatch(path=path,
+                                                query=query)
         headers = cherrypy.request.headers
-        response = CatalogGetResolver.resolve(request, query, headers)
+        # Resolve
+        response = CatalogGetResolver.resolve(request=request,
+                                              query=query,
+                                              headers=headers)
         return json.dumps(response)
 
+    @cherrypy.tools.json_out()
     def POST(self, *path, **query):
-        request = CatalogPostDispatcher.dispatch(path, query)
+        body = json.loads(cherrypy.request.body.read().decode("utf-8"))
+        # Dispatch
+        request = CatalogPostDispatcher.dispatch(path=path,
+                                                 query=query)
         headers = cherrypy.request.headers
-        response = CatalogPostResolver.resolve(request, query, headers)
+        # Resolve
+        response = CatalogPostResolver.resolve(request=request,
+                                               query=query,
+                                               body=body,
+                                               headers=headers)
         return json.dumps(response)
 
     def PUT(self, *path, **query):
-        request = CatalogPutDispatcher.dispatch(path, query)
+        body = json.loads(cherrypy.request.body.read().decode("utf-8"))
+        # Dispatch
+        request = CatalogPutDispatcher.dispatch(path=path,
+                                                query=query)
         headers = cherrypy.request.headers
-        response = CatalogPutResolver.resolve(request, query, headers)
+        # Resolve
+        response = CatalogPutResolver.resolve(request=request,
+                                              query=query,
+                                              body=body,
+                                              headers=headers)
         return json.dumps(response)
 
     def DELETE(self, *path, **query):
-        request = CatalogDeleteDispatcher.dispatch(path, query)
+        # Dispatch
+        request = CatalogDeleteDispatcher.dispatch(path=path,
+                                                   query=query)
         headers = cherrypy.request.headers
-        response = CatalogDeleteResolver.resolve(request, query, headers)
+        # Resolve
+        response = CatalogDeleteResolver.resolve(request=request,
+                                                 query=query,
+                                                 headers=headers)
         return json.dumps(response)
 
 
