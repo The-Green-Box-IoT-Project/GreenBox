@@ -41,7 +41,8 @@ class Catalog:
 
     @cherrypy.tools.json_out()
     def POST(self, *path, **query):
-        body = json.loads(cherrypy.request.body.read().decode("utf-8"))
+        body = cherrypy.request.body.read().decode("utf-8")
+        body = json.loads(body)
         # Dispatch
         request = CatalogPostDispatcher.dispatch(path=path,
                                                  query=query)

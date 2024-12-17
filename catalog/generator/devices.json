@@ -1,1 +1,26 @@
-{"rb01": {"owner": "senpai", "associated_greenhouse": "gh01", "name": "rb_sopra", "device_type": "raspberry"}, "rb02": {"owner": null, "associated_greenhouse": null, "name": null, "device_type": "raspberry"}, "dht11_01": {"owner": null, "associated_greenhouse": null, "name": null, "device_type": "dht11"}, "fan01": {"owner": "senpai", "associated_greenhouse": "gh01", "name": "vent", "device_type": "fan"}}
+{
+  "rb01": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "rb_sopra",
+    "device_type": "raspberry"
+  },
+  "rb02": {
+    "owner": null,
+    "associated_greenhouse": null,
+    "name": null,
+    "device_type": "raspberry"
+  },
+  "dht11_01": {
+    "owner": null,
+    "associated_greenhouse": null,
+    "name": null,
+    "device_type": "dht11"
+  },
+  "fan01": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "vent",
+    "device_type": "ventilation"
+  }
+}

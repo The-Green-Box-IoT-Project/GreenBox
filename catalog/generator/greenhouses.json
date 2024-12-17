@@ -1,1 +1,25 @@
-{"gh01": {"owner": "senpai", "name": "balcone", "devices": ["rb01", "fan01"]}, "gh02": {"owner": null, "name": null, "devices": []}, "gh03": {"owner": null, "name": null, "devices": []}, "gh04": {"owner": null, "name": null, "devices": []}}
+{
+  "gh01": {
+    "owner": "senpai",
+    "name": "balcone",
+    "devices": [
+      "rb01",
+      "fan01"
+    ]
+  },
+  "gh02": {
+    "owner": null,
+    "name": null,
+    "devices": []
+  },
+  "gh03": {
+    "owner": null,
+    "name": null,
+    "devices": []
+  },
+  "gh04": {
+    "owner": null,
+    "name": null,
+    "devices": []
+  }
+}
