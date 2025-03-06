@@ -2,6 +2,7 @@ import json
 import uuid
 from pathlib import Path
 from os import path
+from pprint import pprint
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
@@ -10,6 +11,7 @@ SESSIONS_FILE = P / 'sessions.json'
 SERVICES_FILE = P / 'services.json'
 GREENHOUSES_FILE = P / 'generator' / 'greenhouses.json'
 DEVICES_FILE = P / 'generator' / 'devices.json'
+DEVICES_LEGEND_FILE = P / 'devices_legend.json'
 
 
 def init():
@@ -189,7 +191,31 @@ def retrieve_greenhouses(username):
     """
     with open(USERS_FILE, 'r') as f:
         users = json.load(f)
-    return users[username]['greenhouses']
+    with open(GREENHOUSES_FILE, 'r') as f:
+        greenhouses = json.load(f)
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    with open(DEVICES_LEGEND_FILE, 'r') as f:
+        devices_legend = json.load(f)
+    owned_greenhouses = users[username]['greenhouses']
+    out_greenhouses = list()
+    for greenhouse_id in owned_greenhouses:
+        greenhouse = {
+            'id': greenhouse_id,
+            'name': greenhouses[greenhouse_id]['name'],
+            'devices': []
+        }
+        gh_devices = retrieve_devices(greenhouse_id)
+        for device_id in gh_devices:
+            device_type = devices[device_id]["device_type"]
+            device_name = devices[device_id]["name"]
+            device = devices_legend[device_type]
+            device['id'] = device_id
+            device['name'] = device_name
+            device['type'] = device_type
+            greenhouse['devices'].append(device)
+        out_greenhouses.append(greenhouse)
+    return out_greenhouses
 
 
 def retrieve_devices(greenhouse_id):
@@ -252,3 +278,7 @@ def retrieve_device_association(device_id):
     with open(DEVICES_FILE, 'r') as f:
         devices = json.load(f)
     return devices[device_id]['associated_greenhouse']
+
+
+if __name__ == '__main__':
+    pprint(retrieve_greenhouses('senpai'))

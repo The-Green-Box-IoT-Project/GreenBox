@@ -1,0 +1,44 @@
+[
+  {
+    "id": "gh01",
+    "name": "balcone",
+    "devices": [
+      {
+        "measurements": [
+          {
+            "type": "temperature",
+            "unit": "celsius"
+          },
+          {
+            "type": "humidity",
+            "unit": "%"
+          },
+          {
+            "type": "acidity",
+            "unit": "pH"
+          },
+          {
+            "type": "luminosity",
+            "unit": "lumen"
+          }
+        ],
+        "id": "rb01",
+        "name": "rb_sopra"
+      },
+      {
+        "measurements": [
+          {
+            "type": "temperature",
+            "unit": "celsius"
+          },
+          {
+            "type": "humidity",
+            "unit": "%"
+          }
+        ],
+        "id": "fan01",
+        "name": "vent"
+      }
+    ]
+  }
+]

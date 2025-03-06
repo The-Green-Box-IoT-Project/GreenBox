@@ -1,8 +1,25 @@
 {
-  "dht11": {
-    "device_name": "DHT11",
-    "device_type": "sensor",
-    "pin": 1,
+  "raspberry": {
+    "measurements": [
+      {
+        "type": "temperature",
+        "unit": "celsius"
+      },
+      {
+        "type": "humidity",
+        "unit": "%"
+      },
+      {
+        "type": "acidity",
+        "unit": "pH"
+      },
+      {
+        "type": "luminosity",
+        "unit": "lumen"
+      }
+    ]
+  },
+  "ventilation": {
     "measurements": [
       {
         "type": "temperature",
@@ -14,12 +31,28 @@
       }
     ]
   },
-  "smartfan01": {
-    "device_name": "Smart Fan",
-    "device_type": "actuator",
-    "controls": [{
-      "type": "power",
-      "unit": "%"
-    }]
+  "heating": {
+    "measurements": [
+      {
+        "type": "temperature",
+        "unit": "celsius"
+      }
+    ]
+  },
+  "illumination": {
+    "measurements": [
+      {
+        "type": "luminosity",
+        "unit": "lumen"
+      }
+    ]
+  },
+  "irrigation": {
+    "measurements": [
+      {
+        "type": "humidity",
+        "unit": "%"
+      }
+    ]
   }
 }

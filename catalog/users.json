@@ -1,1 +1,1 @@
-{"admin": {"password": "admin", "greenhouses": ["gh01"]}, "senpai": {"password": "greensex", "greenhouses": ["gh02"]}}
+{"admin": {"password": "admin", "greenhouses": []}, "senpai": {"password": "iot", "greenhouses": ["gh01"]}}

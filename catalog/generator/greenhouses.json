@@ -1,17 +1,25 @@
 {
   "gh01": {
-    "owner": "admin",
-    "name": "Balcone",
+    "owner": "senpai",
+    "name": "balcone",
     "devices": [
-      "d01",
-      "d02"
+      "rb01",
+      "fan01"
     ]
   },
   "gh02": {
-    "owner": "senpai",
-    "name": "Balconeaaaaaa",
-    "devices": [
-      "d03"
-    ]
+    "owner": null,
+    "name": null,
+    "devices": []
+  },
+  "gh03": {
+    "owner": null,
+    "name": null,
+    "devices": []
+  },
+  "gh04": {
+    "owner": null,
+    "name": null,
+    "devices": []
   }
 }
