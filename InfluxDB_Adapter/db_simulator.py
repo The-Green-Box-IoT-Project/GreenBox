@@ -12,7 +12,7 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         self.timeseries = self.compose_timeseries()
         self.clock = Today()
 
-    def query_timestamps(self, start_date='2024-01-01 00:00:00', end_date='2025-01-01 00:00:00'):
+    def query_timestamps(self, start_date='2025-01-01 00:00:00', end_date='2025-12-01 00:00:00'):
         """
         Queries and filters time series data within a specified time window.
         """
@@ -82,15 +82,15 @@ if __name__ == '__main__':
     read_env()
 
     # Specify the measurement type (e.g., humidity, pH, etc.)
-    measurement_name = 'pH'
+    measurement_name = 'humidity'
 
     # Initialize the time series generator for the specified measurement
     timeseries_generator = InfluxDBSimulator(mock_values_mapper(measurement_name), measurement_name)
 
     # Query the last 5 minutes of data
-    measurements = timeseries_generator.query_last_minutes(5)
+    # measurements = timeseries_generator.query_last_minutes(5)
 
     # Query data for a given time interval
-    # measurements = timeseries_generator.query_timestamps('2024-11-01 15:35:00', '2024-11-01 15:55:00')
+    measurements = timeseries_generator.query_timestamps('2025-03-01 15:35:00', '2025-03-01 15:55:00')
 
     print(measurements)
