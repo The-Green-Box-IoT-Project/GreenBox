@@ -34,9 +34,10 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         df_filtered = df[(df.index >= exact_start) & (df.index <= exact_end)]
 
         # Debugging output: print the filtered data
-        print(df_filtered)
+        # print(df_filtered)
 
-        return df_filtered
+        # Convert the filtered DataFrame to a list of dictionaries, that contains the time (UNIX timestamp) and value
+        return convert_df_to_list(df_filtered)
 
     def query_last_minutes(self, minutes):
         # Generate the initial series
@@ -51,9 +52,12 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
 
         # Filter rows within the specified time window
         df_filtered = df_resampled[(df_resampled.index >= self.clock.last_minutes(minutes)) & (df_resampled.index <= self.clock.now)]
-        print("Filtered Data:", df_filtered)
 
-        return df_filtered
+        # Debugging output: print the filtered data
+        # print("Filtered Data:", df_filtered)
+
+        # Convert the filtered DataFrame to a list of dictionaries, that contains the time (UNIX timestamp) and value
+        return convert_df_to_list(df_filtered)
 
     def _generate_series(self, start, end):
         """Generates the time series data between the start and end timestamps."""
@@ -78,16 +82,15 @@ if __name__ == '__main__':
     read_env()
 
     # Specify the measurement type (e.g., humidity, pH, etc.)
-    measurement_name = 'humidity'
+    measurement_name = 'pH'
 
     # Initialize the time series generator for the specified measurement
     timeseries_generator = InfluxDBSimulator(mock_values_mapper(measurement_name), measurement_name)
 
     # Query the last 5 minutes of data
-    df = timeseries_generator.query_last_minutes(5)
+    measurements = timeseries_generator.query_last_minutes(5)
 
     # Query data for a given time interval
-    # df = timeseries_generator.query_timestamps('2024-11-01 15:35:00', '2024-11-01 15:55:00')
+    # measurements = timeseries_generator.query_timestamps('2024-11-01 15:35:00', '2024-11-01 15:55:00')
 
-    # Convert the filtered DataFrame to a list of dictionaries, that contains the time (UNIX timestamp) and value
-    print(convert_df_to_list(df))
+    print(measurements)
