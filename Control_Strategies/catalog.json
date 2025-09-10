@@ -1,0 +1,33 @@
+{
+    "temperature": {
+      "mock_file": "Raspberry_Connector/sensors/dht11/mock_values.json",
+      "base_topic": "GreenBox/dht11/temperature",
+      "strategy": "ForecastEnhancedTemperatureControlStrategy",
+      "thresholds": { "min": 18, "max": 26, "deadband": 0.5, "forecast_horizon": 60, "hysteresis_count": 3 }
+    },
+    "humidity": {
+      "mock_file": "Raspberry_Connector/sensors/dht11/mock_values.json",
+      "base_topic": "GreenBox/dht11/humidity",
+      "strategy": "ForecastEnhancedAirHumidityControlStrategy",
+      "thresholds": { "min": 60, "max": 80, "deadband": 2, "forecast_horizon": 60, "hysteresis_count": 3 }
+    },
+    "pH": {
+      "mock_file": "Raspberry_Connector/sensors/pH_meter/mock_values.json",
+      "base_topic": "GreenBox/pH_meter",
+      "strategy": "ForecastEnhancedPHControlStrategy",
+      "thresholds": { "min": 4.8, "max": 5.2, "deadband": 0.2, "forecast_horizon": 60, "hysteresis_count": 3 }
+    },
+    "light": {
+      "mock_file": "Raspberry_Connector/sensors/PAR_meter/mock_values.json",
+      "base_topic": "GreenBox/PAR_meter",
+      "strategy": "ForecastEnhancedIlluminationControlStrategy",
+      "thresholds": { "min": 300, "max": 800, "deadband": 10, "forecast_horizon": 60, "hysteresis_count": 3 }
+    },
+    "soil_humidity": {
+      "mock_file": "Raspberry_Connector/sensors/soil_hygrometer/mock_values.json",
+      "base_topic": "GreenBox/soil_hygrometer",
+      "strategy": "ForecastEnhancedSoilHumidityControlStrategy",
+      "thresholds": { "min": 60, "max": 90, "deadband": 5, "forecast_horizon": 60, "hysteresis_count": 3 }
+    }
+}
+  

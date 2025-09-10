@@ -60,6 +60,7 @@ def convert_data_format(input_data):
 
 
 def mock_values_mapper(measurement_name: str):
+    print(measurement_name)
     if measurement_name in ['temperature', 'humidity']:
         sensor = 'dht11'
     elif measurement_name == 'light':
@@ -70,7 +71,11 @@ def mock_values_mapper(measurement_name: str):
         sensor = 'soil_hygrometer'
     else:
         raise ValueError(f'Unknown measurement_name - {measurement_name}. \nList of possible measurements: temperature, humidity, light, pH, soil_humidity.')
-    return os.path.join(os.getenv('SENSORS'), sensor, 'mock_values.json')
+    sensors_path = os.getenv('SENSORS')
+    if sensors_path is None:
+        raise EnvironmentError("Environment variable 'SENSORS' is not set.")
+    print(sensors_path)
+    return os.path.join(sensors_path, sensor, 'mock_values.json')
 
 
 class Today:

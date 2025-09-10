@@ -1,10 +1,12 @@
 import pandas as pd
 from datetime import timedelta
+import os 
+import sys
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils.tools import (convert_str_to_datetime, read_env, mock_values_mapper, Today,
-                         get_latest_entry_before_now, convert_df_to_list, extend_time_interval)
+                   get_latest_entry_before_now, convert_df_to_list, extend_time_interval)
 from utils.generate_mock_time_series import MockTimeSeriesWrapper
-
 
 class InfluxDBSimulator(MockTimeSeriesWrapper):
     def __init__(self, values_file_path, measurement_name):
@@ -12,7 +14,7 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         self.timeseries = self.compose_timeseries()
         self.clock = Today()
 
-    def query_timestamps(self, start_date='2024-01-01 00:00:00', end_date='2025-01-01 00:00:00'):
+    def query_timestamps(self, start_date='2025-01-01 00:00:00', end_date='2025-12-01 00:00:00'):
         """
         Queries and filters time series data within a specified time window.
         """
@@ -33,11 +35,14 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         # Filter the DataFrame to only include rows within the exact time window
         df_filtered = df[(df.index >= exact_start) & (df.index <= exact_end)]
 
-        # Debugging output: print the filtered data
-        # print(df_filtered)
-
-        # Convert the filtered DataFrame to a list of dictionaries, that contains the time (UNIX timestamp) and value
-        return convert_df_to_list(df_filtered)
+        data = convert_df_to_list(df_filtered)
+    
+    # Modifica ogni record sostituendo la chiave "value" con il nome della misurazione (es. "temperature")
+        for d in data:
+          if "value" in d:
+            d[self.measurement_name] = d.pop("value")
+    
+        return data
 
     def query_last_minutes(self, minutes):
         # Generate the initial series
@@ -56,8 +61,14 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         # Debugging output: print the filtered data
         # print("Filtered Data:", df_filtered)
 
-        # Convert the filtered DataFrame to a list of dictionaries, that contains the time (UNIX timestamp) and value
-        return convert_df_to_list(df_filtered)
+        data = convert_df_to_list(df_filtered)
+    
+    # Sostituisci la chiave "value" con il nome della misurazione
+        for d in data:
+          if "value" in d:
+            d[self.measurement_name] = d.pop("value")
+    
+        return data
 
     def _generate_series(self, start, end):
         """Generates the time series data between the start and end timestamps."""
@@ -82,15 +93,17 @@ if __name__ == '__main__':
     read_env()
 
     # Specify the measurement type (e.g., humidity, pH, etc.)
-    measurement_name = 'pH'
+    measurement_name = 'humidity'
 
     # Initialize the time series generator for the specified measurement
     timeseries_generator = InfluxDBSimulator(mock_values_mapper(measurement_name), measurement_name)
+    
 
     # Query the last 5 minutes of data
     measurements = timeseries_generator.query_last_minutes(5)
 
     # Query data for a given time interval
-    # measurements = timeseries_generator.query_timestamps('2024-11-01 15:35:00', '2024-11-01 15:55:00')
+    #measurements = timeseries_generator.query_timestamps('2025-03-01 15:35:00', '2025-03-01 15:55:00')
+    print(type(measurements))
 
     print(measurements)
