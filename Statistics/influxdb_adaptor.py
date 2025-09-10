@@ -63,24 +63,4 @@ class InfluxDBAdaptor:
         json_data = json.dumps(values_to_publish)
         return json_data
 
-    def write_data(self, measurement_name, tags, fields, timestamp=None):
-        """Scrivi i dati su InfluxDB"""
-        point = influxdb_client.Point(measurement_name)
 
-        # Aggiungi i tag
-        for tag_key, tag_value in tags.items():
-            point = point.tag(tag_key, tag_value)
-
-        # Aggiungi i campi
-        for field_key, field_value in fields.items():
-            point = point.field(field_key, field_value)
-
-        # Imposta il timestamp, se fornito
-        if timestamp:
-            point = point.time(timestamp, write_precision='ms')  # specifica la precisione in millisecondi
-
-        try:
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            print("Dati scritti su InfluxDB con successo.")
-        except Exception as e:
-            print(f"Errore durante la scrittura dei dati su InfluxDB: {e}")

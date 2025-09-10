@@ -1,38 +1,69 @@
 import time
+import json
 from control_module import ControlModule
 from tools.my_mqtt import MyMQTT
 
-# Configuration
+# Configurazione del broker MQTT
 BROKER_IP = "localhost"
 BROKER_PORT = 1883
 
-# Define identifiers
-client_id = "01f20b9e-6df4-43df-9fd6-c1376bb2ba41"
-greenhouse_id = "greenhouse1"
-raspberry_id = "rb01"  # Specific Raspberry Pi identifier
-sensor_id = "dht11"
-measurement_type = "temperature"
+# Definisci l'ID del Raspberry Pi corrente
+raspberry_id = "rb01"
 
-# Construct the base topic dynamically
-base_topic = f"/{client_id}/{greenhouse_id}/{raspberry_id}/{sensor_id}/{measurement_type}"
+# Carica la configurazione del client dal file strategies.json
+with open("strategies.json", "r") as f:
+    strategies = json.load(f)
 
-TEMPERATURE_TOPIC = f"{base_topic}/statistics"
-RASPBERRY_ID = raspberry_id
+# Trova la configurazione del client basata su raspberry_id
+client = None
+for c in strategies["clients"]:
+    if c["raspberry_id"] == raspberry_id:
+        client = c
+        break
 
-# Create the MQTT client
-mqtt_client = MyMQTT(clientID="TemperatureControl", broker=BROKER_IP, port=BROKER_PORT)
+if client is None:
+    raise ValueError(f"Raspberry Pi con ID '{raspberry_id}' non trovato in strategies.json.")
 
-# Create the control module for the specific Raspberry Pi
-control_module = ControlModule(mqtt_client, RASPBERRY_ID, base_topic)
+# Estrai gli identificatori necessari
+client_id = client.get("client_id", "default_client_id")
+greenhouse_id = client.get("greenhouse_id", "default_greenhouse_id")
 
-# Set the control module in the MQTT client
+# Costruisci il topic base dinamicamente
+base_topic = f"/{client_id}/{greenhouse_id}/{raspberry_id}"
+
+# Crea un set di metriche da sottoscrivere basato sulle soglie degli attuatori
+metrics = set()
+for actuator in client.get("actuators", []):
+    for metric in actuator["thresholds"].keys():
+        metrics.add(metric)
+
+# Mappa le metriche ai topic dei sensori corrispondenti
+metric_to_topic_map = {
+    "temperature": f"{base_topic}/statistics/dht11/temperature",
+    "humidity": f"{base_topic}/statistics/dht11/humidity",
+    "light": f"{base_topic}/statistics/par_meter",
+    "soil_humidity": f"{base_topic}/statistics/grodan",
+    "pH": f"{base_topic}/statistics/ph_meter"
+}
+
+# Definisci tutti i topic di interesse per le varie statistiche basate sulle metriche necessarie
+topics = {metric: topic for metric, topic in metric_to_topic_map.items() if metric in metrics}
+
+# Crea il client MQTT
+mqtt_client = MyMQTT(clientID="GreenhouseControl", broker=BROKER_IP, port=BROKER_PORT)
+
+# Crea il modulo di controllo per il Raspberry Pi specifico
+control_module = ControlModule(mqtt_client, raspberry_id, base_topic)
+
+# Imposta il modulo di controllo nel client MQTT
 mqtt_client.set_control_module(control_module)
 
-# Start the MQTT client and subscribe to the temperature statistics topic
+# Avvia il client MQTT e sottoscrivi tutti i topic rilevanti delle statistiche
 mqtt_client.start()
-mqtt_client.mySubscribe(TEMPERATURE_TOPIC)
+for topic in topics.values():
+    mqtt_client.mySubscribe(topic)
 
-# Keep the program running
+# Mantieni il programma in esecuzione
 try:
     while True:
         time.sleep(30)

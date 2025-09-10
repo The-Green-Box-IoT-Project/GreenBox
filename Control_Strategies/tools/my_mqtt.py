@@ -42,9 +42,9 @@ class MyMQTT:
         Se il modulo di controllo è configurato, inoltra il messaggio al modulo di controllo.
         """
         payload = message.payload.decode('utf-8')
+        print(f"[DEBUG] Messaggio ricevuto su {message.topic}: {payload}")
 
         if self._control_module:
-            # Passa le statistiche al modulo di controllo
             data = json.loads(payload)
             self._control_module.analyze_statistics(data)
 
@@ -54,7 +54,12 @@ class MyMQTT:
         :param topic: Topic MQTT su cui pubblicare
         :param msg: Messaggio da pubblicare (dizionario)
         """
-        print(f"Publishing message on topic '{topic}': {msg}")
+
+        def on_publish(client, userdata, mid):
+            print(f"[DEBUG] Messaggio pubblicato con ID {mid} su {topic}")
+
+        self._paho_mqtt.on_publish = on_publish  # Imposta il callback per conferma
+        print(f"[INFO] Pubblicazione del messaggio su '{topic}': {msg}")
         self._paho_mqtt.publish(topic, json.dumps(msg), qos=2)
 
     def mySubscribe(self, topic):
