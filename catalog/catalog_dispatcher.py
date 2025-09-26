@@ -187,7 +187,7 @@ class CatalogPostDispatcher:
         Called by a user that wants to be registered on the system.
         path: signup
         query: -
-        body: username, password, repeat_password
+        body: username, password
         auth: -
         """
         if len(path) != 1:

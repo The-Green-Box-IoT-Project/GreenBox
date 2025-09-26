@@ -200,10 +200,7 @@ class CatalogPostResolver:
             raise cherrypy.HTTPError(status=400, message='missing_fields')
         username = body['username']
         password = body['password']
-        repeat_password = body['repeat_password']
-        if password != repeat_password:
-            raise cherrypy.HTTPError(status=403, message='passwords_dont_match')
-        elif not catalog_interface.signup_user(username, password):
+        if not catalog_interface.signup_user(username, password):
             raise cherrypy.HTTPError(status=403, message='username_taken')
         token = catalog_interface.validate_login(username, password)
         response = {'token': token}
@@ -228,10 +225,8 @@ class CatalogPostResolver:
         is_token_valid = catalog_interface.verify_token(token)
         if not is_token_valid:
             raise cherrypy.HTTPError(status=401, message='invalid_combination')
-        greenhouses = catalog_interface.retrieve_greenhouses(username)
         response = {
-            'token': token,
-            'greenhouses': greenhouses
+            'token': token
         }
         return response
 

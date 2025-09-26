@@ -1,13 +1,13 @@
 import json
-import uuid
 from pathlib import Path
 from os import path
 from pprint import pprint
 
+from catalog.token import Token
+
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 USERS_FILE = P / 'users.json'
-SESSIONS_FILE = P / 'sessions.json'
 SERVICES_FILE = P / 'services.json'
 GREENHOUSES_FILE = P / 'generator' / 'greenhouses.json'
 DEVICES_FILE = P / 'generator' / 'devices.json'
@@ -15,7 +15,7 @@ DEVICES_LEGEND_FILE = P / 'devices_legend.json'
 
 
 def init():
-    catalogs = [USERS_FILE, SESSIONS_FILE, SERVICES_FILE]
+    catalogs = [USERS_FILE, SERVICES_FILE]
     for catalog in catalogs:
         if not path.exists(catalog):
             with open(catalog, 'w') as f:
@@ -61,62 +61,34 @@ def validate_login(username, password):
         return None
     if not users[username]['password'] == password:
         return None
-    return _generate_token(username)
+    token = Token.generate(username)
+    return Token.serialize(token)
 
 
-def _generate_token(username):
-    """
-    Used to generate an unique session token for the given user. This
-    token is assumed unique, under the assumption that UUID4 is an
-    unique identifier.
-    """
-    token = str(uuid.uuid4())
-    clean_sessions = _expire_token(username)
-    clean_sessions[token] = {'username': username}
-    with open(SESSIONS_FILE, 'w') as f:
-        f.write(json.dumps(clean_sessions))
-    return token
-
-
-def _expire_token(username):
-    """
-    Used to delete the active token for a given user.
-    """
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-    clean_sessions = {k: v for k, v in sessions.items() if v['username'] != username}
-    return clean_sessions
-
-
-def verify_token(token):
+def verify_token(token_http):
     """
     Used to verify the validity of a specific session token.
     """
-    if token is None:
+    if token_http is None:
         return False
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-        if token in sessions:
-            return True
-    return False
+    return not Token.deserialize(token_http).is_expired()
 
 
-def retrieve_username_by_token(token):
+def retrieve_username_by_token(token_http):
     """
     Used to retrieve the username given a specific session token.
     """
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-    if token in sessions:
-        return sessions[token]['username']
-    return None
+    if token_http is None:
+        return None
+    token = Token.deserialize(token_http)
+    return token.username
 
 
 # Existence
 def verify_greenhouse_existence(greenhouse_id):
     """
     Used to verify that a specified greenhouse is registered. This is
-    to prevent that an user can claim a greenhouse that is not registered.
+    to prevent that a user can claim a greenhouse that is not registered.
     """
     with open(GREENHOUSES_FILE, 'r') as f:
         greenhouses = json.load(f)
@@ -128,7 +100,7 @@ def verify_greenhouse_existence(greenhouse_id):
 def verify_device_existence(device_id):
     """
     Used to verify that a specified device is registered. This is
-    to prevent that an user can associate a device that is not registered.
+    to prevent that a user can associate a device that is not registered.
     """
     with open(DEVICES_FILE, 'r') as f:
         devices = json.load(f)
