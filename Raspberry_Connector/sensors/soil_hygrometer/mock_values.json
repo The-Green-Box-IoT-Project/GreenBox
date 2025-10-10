@@ -1,13 +1,13 @@
 {
   "soil_humidity": {
-    "base_value": 80,
+    "base_value": 70,
     "daily_seasonality": {
       "times": [0, 6, 9, 12, 15, 18, 21, 23],
       "values": [0, -2, 0.5, 4, 4.5, 5, 1, 0]
     },
     "yearly_seasonality": {
       "times": [0, 90, 182, 273, 364],
-      "values": [10, 0, -10, 0, 10]
+      "values": [5, 0, -5, 0, 5]
     },
     "noise": {"mean": 0, "std":  0.5, "correlation":  0.5}
   }
