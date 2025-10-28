@@ -1,0 +1,62 @@
+{
+  "temperature": {
+    "base_value": 20,
+    "daily_seasonality": {
+      "times": [0, 6, 12, 18, 23],
+      "values": [-2, -1, 1, 2, -2]
+    },
+    "yearly_seasonality": {
+      "times": [1, 90, 182, 273, 364],
+      "values": [-1, 0, 1, 0, -1]
+    },
+    "noise": {"mean": 0, "std":  0.15, "correlation":  0.5}
+  },
+  "humidity": {
+    "base_value": 70,
+    "daily_seasonality": {
+      "times": [0, 6, 12, 18, 23],
+      "values": [5, 0, -5, 0, 5]
+    },
+    "yearly_seasonality": {
+      "times": [1, 90, 182, 273, 364],
+      "values": [-10, 0, 10, 0, -10]
+    },
+    "noise": {"mean": 0, "std":  0.5, "correlation":  0.7}
+  },
+  "light": {
+    "base_value": 0,
+    "daily_seasonality": {
+      "times": [0, 6, 12, 18, 23],
+      "values": [0, 0, 1, 0, 0]
+    },
+    "yearly_seasonality": {
+      "times": [1, 91, 183, 274, 364],
+      "values": [200, 400, 1000, 400, 200]
+    },
+    "noise": {"mean": 0, "std": 10, "correlation": 0.3}
+  },
+  "pH": {
+    "base_value": 5,
+    "daily_seasonality": {
+      "times": [0, 6, 12, 18, 23],
+      "values": [0, 0.01, 0, 0, -0.01, 0]
+    },
+    "yearly_seasonality": {
+      "times": [0, 90, 182, 273, 364],
+      "values": [1, 0.8, 0.6, 0.8, 1]
+    },
+    "noise": {"mean": 0, "std":  0.05, "correlation":  0.5}
+  },
+  "soil_humidity": {
+    "base_value": 70,
+    "daily_seasonality": {
+      "times": [0, 6, 9, 12, 15, 18, 21, 23],
+      "values": [0, -2, 0.5, 4, 4.5, 5, 1, 0]
+    },
+    "yearly_seasonality": {
+      "times": [0, 90, 182, 273, 364],
+      "values": [5, 0, -5, 0, 5]
+    },
+    "noise": {"mean": 0, "std":  0.5, "correlation":  0.5}
+  }
+}

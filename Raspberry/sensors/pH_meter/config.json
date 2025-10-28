@@ -1,0 +1,12 @@
+{
+  "device_uuid": "phph-phph",
+  "device_name": "PH_meter",
+  "pin": 2,
+  "measurements": [
+    {
+      "name": "pH",
+      "unit": "-",
+      "field": "pH"
+    }
+  ]
+}
