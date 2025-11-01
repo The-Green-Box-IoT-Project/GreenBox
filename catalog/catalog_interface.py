@@ -1,6 +1,6 @@
 import json
-from pathlib import Path
 from os import path
+from pathlib import Path
 from pprint import pprint
 
 from catalog.token import Token

@@ -22,5 +22,11 @@
     "associated_greenhouse": "gh01",
     "name": "vent",
     "device_type": "ventilation"
+  },
+  "9b05a2d1-d60d-4b9c-ba1f-a9d1a2bf9e3b": {
+    "owner": "steurendo",
+    "associated_greenhouse": "b821fa4d-a11e-4d1a-96ba-2222cc7a8369",
+    "name": "device_test_name",
+    "device_type": "raspberry"
   }
 }

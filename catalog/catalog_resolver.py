@@ -111,8 +111,7 @@ class CatalogGetResolver:
         username = catalog_interface.retrieve_username_by_token(token)
         greenhouses = catalog_interface.retrieve_greenhouses(username)
         response = {
-            'greenhouses': greenhouses,
-            'username': username
+            'greenhouses': greenhouses
         }
         return response
 
@@ -193,10 +192,10 @@ class CatalogPostResolver:
         Called by a user that wants to be registered on the system.
         path: signup
         query: -
-        body: username, password, repeat_password
+        body: username, password
         auth: -
         """
-        if not {'username', 'password', 'repeat_password'}.issubset(body):
+        if not {'username', 'password'}.issubset(body):
             raise cherrypy.HTTPError(status=400, message='missing_fields')
         username = body['username']
         password = body['password']
