@@ -1,12 +1,13 @@
 import pandas as pd
 from datetime import timedelta
-import os 
+import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils.tools import (convert_str_to_datetime, read_env, mock_values_mapper, Today,
-                   get_latest_entry_before_now, convert_df_to_list, extend_time_interval)
+                         get_latest_entry_before_now, convert_df_to_list, extend_time_interval)
 from utils.generate_mock_time_series import MockTimeSeriesWrapper
+
 
 class InfluxDBSimulator(MockTimeSeriesWrapper):
     def __init__(self, values_file_path, measurement_name):
@@ -36,39 +37,79 @@ class InfluxDBSimulator(MockTimeSeriesWrapper):
         df_filtered = df[(df.index >= exact_start) & (df.index <= exact_end)]
 
         data = convert_df_to_list(df_filtered)
-    
-    # Modifica ogni record sostituendo la chiave "value" con il nome della misurazione (es. "temperature")
+
+        # Modifica ogni record sostituendo la chiave "value" con il nome della misurazione (es. "temperature")
         for d in data:
-          if "value" in d:
-            d[self.measurement_name] = d.pop("value")
-    
+            if "value" in d:
+                d[self.measurement_name] = d.pop("value")
+
         return data
 
-    def query_last_minutes(self, minutes):
-        # Generate the initial series
-        df = self._generate_series(self.clock.start_day, self.clock.end_day)
+    def query_last_minutes(self, minutes: int):
+        # Calcola finestra esatta
+        end_ts = self.clock.now
+        start_ts = self.clock.last_minutes(minutes)
 
-        # Get the last entry and the following hour of data
-        last_entry_index = get_latest_entry_before_now(df)
-        curr_df = df.loc[last_entry_index:last_entry_index + timedelta(hours=1)]
+        # Per essere sicuri di coprire anche ieri, generiamo dal giorno di start_ts al fine giornata di end_ts
+        start_gen = start_ts.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_gen = end_ts.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-        # Resample to 30-second intervals and interpolate
-        df_resampled = curr_df.resample('10s').interpolate(method='linear').round(2)
+        # Genera serie "grezza" sull'intervallo esteso (indice orario)
+        df = self._generate_series(start_gen, end_gen)
 
-        # Filter rows within the specified time window
-        df_filtered = df_resampled[(df_resampled.index >= self.clock.last_minutes(minutes)) & (df_resampled.index <= self.clock.now)]
+        # Resample a 10s e interpolazione
+        df_10s = df.resample('10s').interpolate(method='linear').round(2)
 
-        # Debugging output: print the filtered data
-        # print("Filtered Data:", df_filtered)
+        # Filtro esatto della finestra richiesta
+        df_filtered = df_10s[(df_10s.index >= start_ts) & (df_10s.index <= end_ts)]
 
         data = convert_df_to_list(df_filtered)
-    
-    # Sostituisci la chiave "value" con il nome della misurazione
+
+        # Rinomina la chiave "value" con il nome della misura
         for d in data:
-          if "value" in d:
-            d[self.measurement_name] = d.pop("value")
-    
+            if "value" in d:
+                d[self.measurement_name] = d.pop("value")
+
         return data
+
+    def query_last_value(self, at_time=None):
+        """
+        Restituisce l'ultimo dato disponibile (<= at_time se fornito, altrimenti 'now').
+
+        Ritorna un dict del tipo:
+        {
+            "timestamp": "...",
+            "<measurement_name>": <valore_float>
+        }
+        oppure None se non ci sono dati.
+        """
+        # Tempo di riferimento: ora del clock o uno specificato
+        ref_ts = convert_str_to_datetime(at_time, at_time)[0] if isinstance(at_time, str) else (at_time or self.clock.now)
+
+        # Generiamo una finestra "sicura" per coprire la giornata del ref_ts
+        start_gen = ref_ts.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_gen = ref_ts.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Serie grezza → resample a 10s → interpolazione
+        df = self._generate_series(start_gen, end_gen)
+        df_10s = df.resample('10s').interpolate(method='linear').round(2)
+
+        # Prendiamo l'ultimo campione disponibile <= ref_ts
+        if df_10s.index[0] > ref_ts:
+            return None  # nessun dato fino a ref_ts
+
+        last_row = df_10s.loc[:ref_ts].tail(1)
+
+        # Convertiamo in lista di dict e rinominiamo "value" come negli altri metodi
+        data = convert_df_to_list(last_row)
+        if not data:
+            return None
+
+        # Uniformiamo la chiave come negli altri metodi (in caso convert_df_to_list usi "value")
+        if "value" in data[0]:
+            data[0][self.measurement_name] = data[0].pop("value")
+
+        return data[0]
 
     def _generate_series(self, start, end):
         """Generates the time series data between the start and end timestamps."""
@@ -93,17 +134,16 @@ if __name__ == '__main__':
     read_env()
 
     # Specify the measurement type (e.g., humidity, pH, etc.)
-    measurement_name = 'humidity'
+    measurement_name = 'soil_humidity'
 
     # Initialize the time series generator for the specified measurement
     timeseries_generator = InfluxDBSimulator(mock_values_mapper(measurement_name), measurement_name)
-    
 
     # Query the last 5 minutes of data
-    measurements = timeseries_generator.query_last_minutes(5)
+    measurements = timeseries_generator.query_last_minutes(3600)
 
     # Query data for a given time interval
     #measurements = timeseries_generator.query_timestamps('2025-03-01 15:35:00', '2025-03-01 15:55:00')
-    print(type(measurements))
+    # print(type(measurements))
 
     print(measurements)

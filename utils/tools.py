@@ -41,6 +41,18 @@ def convert_df_to_list(df):
     return result
 
 
+def convert_list_to_df(data_list):
+    """
+    Converts a list of dictionaries with UNIX timestamps and values
+    back into a pandas DataFrame with datetime index.
+    """
+    df = pd.DataFrame(data_list)
+    df["time"] = pd.to_datetime(df["time"], unit="s")  # Convert UNIX timestamp to datetime
+    df.set_index("time", inplace=True)
+    df.sort_index(inplace=True)  # opzionale, utile per garantire ordine temporale
+    return df
+
+
 def convert_data_format(input_data):
     # List to hold the converted data in the desired format
     result = []
@@ -60,7 +72,6 @@ def convert_data_format(input_data):
 
 
 def mock_values_mapper(measurement_name: str):
-    print(measurement_name)
     if measurement_name in ['temperature', 'humidity']:
         sensor = 'dht11'
     elif measurement_name == 'light':
@@ -70,11 +81,11 @@ def mock_values_mapper(measurement_name: str):
     elif measurement_name == 'soil_humidity':
         sensor = 'soil_hygrometer'
     else:
-        raise ValueError(f'Unknown measurement_name - {measurement_name}. \nList of possible measurements: temperature, humidity, light, pH, soil_humidity.')
+        raise ValueError(
+            f'Unknown measurement_name - {measurement_name}. \nList of possible measurements: temperature, humidity, light, pH, soil_humidity.')
     sensors_path = os.getenv('SENSORS')
     if sensors_path is None:
         raise EnvironmentError("Environment variable 'SENSORS' is not set.")
-    print(sensors_path)
     return os.path.join(sensors_path, sensor, 'mock_values.json')
 
 
@@ -82,7 +93,8 @@ class Today:
     def __init__(self):
         self.start_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         self.end_day = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
-        self.now = datetime.now()
+        self.yesterday = (datetime.now() + timedelta(days=-1)).replace(second=0, microsecond=0)
+        self.now = datetime.now().replace(second=0, microsecond=0)
 
     def last_minutes(self, minutes: int):
         return self.now - timedelta(minutes=minutes)
@@ -117,3 +129,35 @@ def setup_logger():
                         level=logging.DEBUG,
                         format="%(asctime)s - %(levelname)s: %(message)s",
                         force=True)
+
+
+def select_last_measurements(at_time=None):
+    from InfluxDB_Adapter.db_simulator import InfluxDBSimulator
+
+    last_meas = {}
+    timestamp_ref = None
+
+    for metric in ['temperature', 'humidity', 'pH', 'soil_humidity', 'light']:
+        ts_generator = InfluxDBSimulator(mock_values_mapper(metric), metric)
+        measurement = ts_generator.query_last_value(at_time)
+
+        if not measurement:
+            continue  # nessun dato generato
+
+        # Salviamo il valore
+        last_meas[metric] = measurement[metric]
+
+        # Salviamo il timestamp solo una volta
+        if timestamp_ref is None and 'time' in measurement:
+            time_val = measurement['time']
+            # Se è datetime lo converte in stringa
+            if isinstance(time_val, datetime):
+                timestamp_ref = time_val.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                timestamp_ref = str(time_val)
+
+    # Aggiungi il timestamp (se disponibile)
+    if timestamp_ref:
+        last_meas['timestamp'] = timestamp_ref
+
+    return last_meas
