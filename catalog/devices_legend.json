@@ -19,7 +19,7 @@
       }
     ]
   },
-  "ventilation": {
+  "ventilation_system": {
     "measurements": [
       {
         "type": "temperature",
@@ -31,7 +31,7 @@
       }
     ]
   },
-  "heating": {
+  "heating_system": {
     "measurements": [
       {
         "type": "temperature",
@@ -39,7 +39,7 @@
       }
     ]
   },
-  "illumination": {
+  "illumination_system": {
     "measurements": [
       {
         "type": "luminosity",
@@ -47,11 +47,63 @@
       }
     ]
   },
-  "irrigation": {
+  "irrigation_system": {
     "measurements": [
       {
         "type": "humidity",
         "unit": "%"
+      }
+    ]
+  },
+  "humidification_system": {
+    "measurements": [
+      {
+        "type": "temperature",
+        "unit": "celsius"
+      },
+      {
+        "type": "humidity",
+        "unit": "%"
+      }
+    ]
+  },
+  "dht11": {
+    "measurements": [
+      {
+        "type": "temperature",
+        "unit": "celsius"
+      },
+      {
+        "type": "humidity",
+        "unit": "%"
+      }
+    ]
+  },
+  "light_sensor": {
+    "measurements": [
+      {
+        "unit": "PPFD",
+        "type": "light"
+      },
+      {
+        "unit": "PPFD",
+        "type": "light_natural"
+      }
+    ]
+  },
+  "pH_sensor": {
+    "measurements": [
+      {
+        "unit": "-",
+        "type": "pH"
+      }
+    ]
+  },
+  "soil_humidity_sensor": {
+    "measurements": [
+      {
+        "unit": "%",
+        "type": "soil_humidity"
       }
     ]
   }

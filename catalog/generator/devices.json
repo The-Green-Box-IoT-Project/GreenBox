@@ -1,26 +1,62 @@
 {
-  "rb01": {
+  "rb_001": {
     "owner": "senpai",
     "associated_greenhouse": "gh01",
     "name": "rb_sopra",
     "device_type": "raspberry"
   },
-  "rb02": {
-    "owner": null,
-    "associated_greenhouse": null,
-    "name": null,
-    "device_type": "raspberry"
-  },
-  "dht11_01": {
-    "owner": null,
-    "associated_greenhouse": null,
-    "name": null,
-    "device_type": "dht11"
-  },
-  "fan01": {
+  "tthh": {
     "owner": "senpai",
     "associated_greenhouse": "gh01",
-    "name": "vent",
-    "device_type": "ventilation"
+    "name": "DHT11 sensor",
+    "device_type": "dht11"
+  },
+  "llll": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Light sensor",
+    "device_type": "light_sensor"
+  },
+  "phph": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "PH sensor",
+    "device_type": "pH_sensor"
+  },
+  "shsh": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Soil Humidity sensor",
+    "device_type": "soil_humidity_sensor"
+  },
+  "fan_001": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Ventilation actuator",
+    "device_type": "ventilation_system"
+  },
+  "heater_001": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Heater actuator",
+    "device_type": "heating_system"
+  },
+  "led_001": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Led actuator",
+    "device_type": "illumination_system"
+  },
+  "humidifier_001": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Humidifier actuator",
+    "device_type": "humidification_system"
+  },
+  "sprinkler_001": {
+    "owner": "senpai",
+    "associated_greenhouse": "gh01",
+    "name": "Sprinkler actuator",
+    "device_type": "irrigation_system"
   }
 }

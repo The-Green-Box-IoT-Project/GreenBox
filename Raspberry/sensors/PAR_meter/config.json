@@ -1,9 +1,0 @@
-{
-  "device_uuid": "llll-llll",
-  "device_name": "PAR_meter",
-  "pin": 2,
-  "measurements": [
-    { "name": "PAR (internal)", "unit": "PPFD", "field": "light" },
-    { "name": "PAR (natural)",  "unit": "PPFD", "field": "light_natural" }
-  ]
-}

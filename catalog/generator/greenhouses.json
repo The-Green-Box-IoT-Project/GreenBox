@@ -3,8 +3,16 @@
     "owner": "senpai",
     "name": "balcone",
     "devices": [
-      "rb01",
-      "fan01"
+      "rb_001",
+      "fan_001",
+      "heater_001",
+      "led_001",
+      "humidifier_001",
+      "sprinkler_001",
+      "tthh",
+      "llll",
+      "phph",
+      "shsh"
     ]
   },
   "gh02": {

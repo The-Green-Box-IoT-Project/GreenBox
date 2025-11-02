@@ -1,6 +1,6 @@
 {
-  "catalog_ip": "0.0.0.0",
+  "catalog_ip": "127.0.0.1",
   "catalog_port": 8080,
-  "broker_ip": "mqtt.eclipseprojects.io",
+  "broker_ip": "127.0.0.1",
   "broker_port": 1883
 }

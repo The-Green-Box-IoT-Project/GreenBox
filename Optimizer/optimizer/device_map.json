@@ -1,7 +1,0 @@
-{
-  "ventilation_system": "fan_001",
-  "irrigation_system": "sprinkler_001",
-  "illumination_system": "led_001",
-  "heating_system": "heater_001",
-  "humidification_system": "humidifier_001"
-}
