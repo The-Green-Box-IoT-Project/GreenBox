@@ -1,1 +1,9 @@
-{"admin": {"password": "admin", "greenhouses": []}, "senpai": {"password": "iot", "greenhouses": ["gh01"]}, "steurendo": {"password": "iot", "greenhouses": ["b821fa4d-a11e-4d1a-96ba-2222cc7a8369"]}}
+{
+  "alice88": {
+    "nome": "Alice",
+    "surname": "Brambilla",
+    "password": "secret",
+    "address": "corso Belgio 12",
+    "telefono": "3287580661"
+  }
+}

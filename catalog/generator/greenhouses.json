@@ -1,40 +1,14 @@
 {
   "gh01": {
-    "owner": "senpai",
-    "name": "balcone",
-    "devices": [
-      "rb_001",
-      "fan_001",
-      "heater_001",
-      "led_001",
-      "humidifier_001",
-      "sprinkler_001",
-      "tthh",
-      "llll",
-      "phph",
-      "shsh"
-    ]
-  },
-  "gh02": {
-    "owner": null,
-    "name": null,
-    "devices": []
-  },
-  "gh03": {
-    "owner": null,
-    "name": null,
-    "devices": []
-  },
-  "gh04": {
-    "owner": null,
-    "name": null,
-    "devices": []
-  },
-  "b821fa4d-a11e-4d1a-96ba-2222cc7a8369": {
-    "owner": "steurendo",
-    "name": "CasaVerde",
-    "devices": [
-      "9b05a2d1-d60d-4b9c-ba1f-a9d1a2bf9e3b"
+    "owner": "alice",
+    "name": "SerraAlice",
+    "raspberry": [
+      "rb00101"
+    ],
+    "actuators": [
+      "fan01",
+      "heater01",
+      "irrigation01"
     ]
   }
 }
