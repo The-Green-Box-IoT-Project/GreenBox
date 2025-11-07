@@ -28,6 +28,7 @@ def retrieve_endpoint():
 class Catalog:
     exposed = True
 
+    @cherrypy.tools.json_out()
     def GET(self, *path, **query):
         # Dispatch
         request = CatalogGetDispatcher.dispatch(path=path,
@@ -37,12 +38,15 @@ class Catalog:
         response = CatalogGetResolver.resolve(request=request,
                                               query=query,
                                               headers=headers)
-        return json.dumps(response)
+        return response
 
     @cherrypy.tools.json_out()
     def POST(self, *path, **query):
         body = cherrypy.request.body.read().decode("utf-8")
-        body = json.loads(body)
+        if body == "":
+            body = {}
+        else:
+            body = json.loads(body)
         # Dispatch
         request = CatalogPostDispatcher.dispatch(path=path,
                                                  query=query)
@@ -52,10 +56,15 @@ class Catalog:
                                                query=query,
                                                body=body,
                                                headers=headers)
-        return json.dumps(response)
+        return response
 
+    @cherrypy.tools.json_out()
     def PUT(self, *path, **query):
-        body = json.loads(cherrypy.request.body.read().decode("utf-8"))
+        body = cherrypy.request.body.read().decode("utf-8")
+        if body == "":
+            body = {}
+        else:
+            body = json.loads(body)
         # Dispatch
         request = CatalogPutDispatcher.dispatch(path=path,
                                                 query=query)
@@ -65,8 +74,9 @@ class Catalog:
                                               query=query,
                                               body=body,
                                               headers=headers)
-        return json.dumps(response)
+        return response
 
+    @cherrypy.tools.json_out()
     def DELETE(self, *path, **query):
         # Dispatch
         request = CatalogDeleteDispatcher.dispatch(path=path,
@@ -76,7 +86,7 @@ class Catalog:
         response = CatalogDeleteResolver.resolve(request=request,
                                                  query=query,
                                                  headers=headers)
-        return json.dumps(response)
+        return response
 
 
 if __name__ == '__main__':

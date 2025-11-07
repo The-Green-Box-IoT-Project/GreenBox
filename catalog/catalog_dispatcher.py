@@ -8,6 +8,12 @@ class CatalogGetRequest(Enum):
     RETRIEVE_GREENHOUSES = auto(),
     RETRIEVE_DEVICES = auto(),
     DEVICE_JOIN = auto(),
+    GET_DEVICE_STATUS = auto(),
+    GET_CROPS = auto(),
+    SET_CROP = auto(),
+    GET_DEVICES = auto(),
+    SERVICE_OVERVIEW = auto(),
+    SERVICE_GH_DETAIL = auto(),
 
 
 class CatalogPostRequest(Enum):
@@ -16,12 +22,16 @@ class CatalogPostRequest(Enum):
     REGISTER_NEW_DEVICE = auto(),
     SIGN_UP = auto(),
     LOGIN = auto(),
+    TOKEN_LOGIN = auto()
+    SET_CROP = auto()
 
 
 class CatalogPutRequest(Enum):
     NOT_FOUND = auto(),
     ASSOCIATE_GREENHOUSE = auto(),
     ASSOCIATE_DEVICE = auto(),
+    UPDATE_DEVICE_STATUS = auto()
+    UPDATE_STRATEGY = auto()
 
 
 class CatalogDeleteRequest(Enum):
@@ -41,7 +51,45 @@ class CatalogGetDispatcher:
             return CatalogGetRequest.RETRIEVE_GREENHOUSES
         if CatalogGetDispatcher._is_retrieve_devices_request(path, query):
             return CatalogGetRequest.RETRIEVE_DEVICES
+        if CatalogGetDispatcher._is_device_status_request(path, query):
+            return CatalogGetRequest.GET_DEVICE_STATUS
+        if CatalogGetDispatcher._is_get_crops_request(path, query):
+            return CatalogGetRequest.GET_CROPS
+        if CatalogGetDispatcher._is_get_devices_request(path, query):
+            return CatalogGetRequest.GET_DEVICES
+        if len(path) == 2 and path[0] == 'services' and path[1] == 'overview':
+            return CatalogGetRequest.SERVICE_OVERVIEW
+        if len(path) == 2 and path[0] == 'services' and path[1] == 'gh':
+            return CatalogGetRequest.SERVICE_GH_DETAIL
         return CatalogGetRequest.NOT_FOUND
+
+    @staticmethod
+    def _is_get_devices_request(path, query):
+        return len(path) == 1 and path[0] == 'devices' and {'greenhouse_id', 'token'}.issubset(query)
+
+    @staticmethod
+    def _is_get_crops_request(path, query):
+        """
+        path: crops
+        query: (opzionale) token per UI autenticata
+        """
+        return len(path) == 1 and path[0] == 'crops'
+
+
+    @staticmethod
+    def _is_device_status_request(path, query):
+        """
+        Retrieve current status of a device.
+        path: device/status
+        query: device_id
+        """
+        if len(path) != 2:
+            return False
+        if path[0] != 'device' or path[1] != 'status':
+            return False
+        if 'device_id' not in query:
+            return False
+        return True
 
     @staticmethod
     def _is_broker_request(path):
@@ -139,7 +187,20 @@ class CatalogPostDispatcher:
             return CatalogPostRequest.SIGN_UP
         if CatalogPostDispatcher._is_login_request(path, query):
             return CatalogPostRequest.LOGIN
+        if CatalogPostDispatcher._is_set_crop_request(path, query):    # <-- NEW
+            return CatalogPostRequest.SET_CROP
         return CatalogPostRequest.NOT_FOUND
+
+
+    @staticmethod
+    def _is_set_crop_request(path, query):
+        """
+        path: greenhouse/crop
+        query: greenhouse_id, crop, token
+        """
+        if len(path) != 2 or path[0] != 'greenhouse' or path[1] != 'crop':
+            return False
+        return {'greenhouse_id','crop','token'}.issubset(query)
 
     @staticmethod
     def _is_register_new_greenhouse_request(path, query):
@@ -187,7 +248,7 @@ class CatalogPostDispatcher:
         Called by a user that wants to be registered on the system.
         path: signup
         query: -
-        body: username, password, repeat_password
+        body: username, password
         auth: -
         """
         if len(path) != 1:
@@ -220,7 +281,38 @@ class CatalogPutDispatcher:
             return CatalogPutRequest.ASSOCIATE_DEVICE
         if CatalogPutDispatcher._is_associate_greenhouse_request(path, query):
             return CatalogPutRequest.ASSOCIATE_GREENHOUSE
+        if CatalogPutDispatcher._is_update_device_status_request(path, query):
+            return CatalogPutRequest.UPDATE_DEVICE_STATUS
+        if CatalogPutDispatcher._is_update_strategy_request(path, query):  # <-- NEW
+            return CatalogPutRequest.UPDATE_STRATEGY
         return CatalogPutRequest.NOT_FOUND
+
+    @staticmethod
+    def _is_update_device_status_request(path, query):
+        """
+        Update current operational status of a device.
+        path: device/status
+        query: device_id, status, token
+        """
+        if len(path) != 2:
+            return False
+        if path[0] != 'device' or path[1] != 'status':
+            return False
+        if not {'device_id', 'status', 'token'}.issubset(query):
+            return False
+        return True
+
+    @staticmethod
+    def _is_update_strategy_request(path, query):
+        """
+        path: strategy
+        query: greenhouse_id, update, token
+        dove 'update' è una stringa JSON con i campi da modificare
+        (es: {"targets":{"temperature":{"min":21,"max":27}}})
+        """
+        if len(path) != 1 or path[0] != 'strategy':
+            return False
+        return {'greenhouse_id','update','token'}.issubset(query)
 
     @staticmethod
     def _is_associate_greenhouse_request(path, query):

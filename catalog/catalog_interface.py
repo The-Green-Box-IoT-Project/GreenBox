@@ -1,21 +1,26 @@
 import json
-import uuid
-from pathlib import Path
 from os import path
+from pathlib import Path
 from pprint import pprint
+
+from catalog.token import Token
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 USERS_FILE = P / 'users.json'
-SESSIONS_FILE = P / 'sessions.json'
 SERVICES_FILE = P / 'services.json'
 GREENHOUSES_FILE = P / 'generator' / 'greenhouses.json'
 DEVICES_FILE = P / 'generator' / 'devices.json'
 DEVICES_LEGEND_FILE = P / 'devices_legend.json'
+ROOT_DIR = P.parent
+STRATEGIES_FILE = ROOT_DIR / 'Control_Strategies' / 'strategies.json'
+CROP_PROFILES_FILE = ROOT_DIR / 'Control_Strategies' / 'crop_profiles.json'
 
 
 def init():
-    catalogs = [USERS_FILE, SESSIONS_FILE, SERVICES_FILE]
+    catalogs = [USERS_FILE, SERVICES_FILE,
+                GREENHOUSES_FILE, DEVICES_FILE,
+                STRATEGIES_FILE, CROP_PROFILES_FILE]
     for catalog in catalogs:
         if not path.exists(catalog):
             with open(catalog, 'w') as f:
@@ -61,62 +66,34 @@ def validate_login(username, password):
         return None
     if not users[username]['password'] == password:
         return None
-    return _generate_token(username)
+    token = Token.generate(username)
+    return Token.serialize(token)
 
 
-def _generate_token(username):
-    """
-    Used to generate an unique session token for the given user. This
-    token is assumed unique, under the assumption that UUID4 is an
-    unique identifier.
-    """
-    token = str(uuid.uuid4())
-    clean_sessions = _expire_token(username)
-    clean_sessions[token] = {'username': username}
-    with open(SESSIONS_FILE, 'w') as f:
-        f.write(json.dumps(clean_sessions))
-    return token
-
-
-def _expire_token(username):
-    """
-    Used to delete the active token for a given user.
-    """
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-    clean_sessions = {k: v for k, v in sessions.items() if v['username'] != username}
-    return clean_sessions
-
-
-def verify_token(token):
+def verify_token(token_http):
     """
     Used to verify the validity of a specific session token.
     """
-    if token is None:
+    if token_http is None:
         return False
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-        if token in sessions:
-            return True
-    return False
+    return not Token.deserialize(token_http).is_expired()
 
 
-def retrieve_username_by_token(token):
+def retrieve_username_by_token(token_http):
     """
     Used to retrieve the username given a specific session token.
     """
-    with open(SESSIONS_FILE, 'r') as f:
-        sessions = json.load(f)
-    if token in sessions:
-        return sessions[token]['username']
-    return None
+    if token_http is None:
+        return None
+    token = Token.deserialize(token_http)
+    return token.username
 
 
 # Existence
 def verify_greenhouse_existence(greenhouse_id):
     """
     Used to verify that a specified greenhouse is registered. This is
-    to prevent that an user can claim a greenhouse that is not registered.
+    to prevent that a user can claim a greenhouse that is not registered.
     """
     with open(GREENHOUSES_FILE, 'r') as f:
         greenhouses = json.load(f)
@@ -128,7 +105,7 @@ def verify_greenhouse_existence(greenhouse_id):
 def verify_device_existence(device_id):
     """
     Used to verify that a specified device is registered. This is
-    to prevent that an user can associate a device that is not registered.
+    to prevent that a user can associate a device that is not registered.
     """
     with open(DEVICES_FILE, 'r') as f:
         devices = json.load(f)
@@ -278,6 +255,134 @@ def retrieve_device_association(device_id):
     with open(DEVICES_FILE, 'r') as f:
         devices = json.load(f)
     return devices[device_id]['associated_greenhouse']
+
+
+# ------------------- DEVICE STATUS (anagrafica: legacy; runtime in services.json) -------------------
+
+def retrieve_device_status(device_id: str):
+    """
+    Legacy: legge 'status' da devices.json se presente (evitare in produzione).
+    Per il runtime vero usare services/services.json via resolver GET /device/status.
+    """
+    with open(DEVICES_FILE, 'r') as file:
+        devices = json.load(file)
+    if device_id not in devices:
+        return None
+    return devices[device_id].get('status', 'unknown')
+
+
+def update_device_status(device_id: str, new_status: str):
+    """
+    Legacy: scrive 'status' in devices.json (solo per compatibilità).
+    Il runtime corretto viene gestito dal resolver in services.json.
+    """
+    with open(DEVICES_FILE, 'r') as file:
+        devices = json.load(file)
+    if device_id not in devices:
+        return False
+    devices[device_id]['status'] = new_status
+    with open(DEVICES_FILE, 'w') as file:
+        json.dump(devices, file, indent=2)
+    return True
+
+
+# ------------------- CROPS (solo lettura preset) -------------------
+
+def list_crops():
+    with open(CROP_PROFILES_FILE, 'r') as f:
+        return json.load(f)
+
+
+# ------------------- STRATEGY & CROPS -------------------
+
+def _available_roles_in_greenhouse(greenhouse_id):
+    """
+    Raccoglie i roles effettivi dei device associati alla serra
+    filtrando devices.json per greenhouse_id.
+    """
+    with open(DEVICES_FILE, 'r') as f:
+        devices = json.load(f)
+    roles = set()
+    for d in devices.values():
+        if d.get('greenhouse_id') == greenhouse_id and d.get('role'):
+            roles.add(d['role'])
+    return roles
+
+
+def set_crop_for_greenhouse(greenhouse_id: str, crop: str, username: str):
+    if not verify_greenhouse_existence(greenhouse_id):
+        return None, 'greenhouse_not_available'
+    if not verify_greenhouse_ownership(greenhouse_id, username):
+        return None, 'greenhouse_not_available'
+
+    with open(CROP_PROFILES_FILE, 'r') as f:
+        profiles = json.load(f)
+    if crop not in profiles:
+        return None, 'crop_not_found'
+    profile = profiles[crop]
+
+    roles_ok = _available_roles_in_greenhouse(greenhouse_id)
+
+    cloned = {
+        "crop": crop,
+        "profile_version": profile.get("version", 1),
+        "targets": profile.get("targets", {}),
+        "controls": {}
+    }
+    for role, ctrl in profile.get("controls", {}).items():
+        if role in roles_ok:
+            cloned["controls"][role] = ctrl
+
+    with open(STRATEGIES_FILE, 'r') as f:
+        strategies = json.load(f)
+    strategies[greenhouse_id] = cloned
+    with open(STRATEGIES_FILE, 'w') as f:
+        json.dump(strategies, f, indent=2)
+
+    return cloned, None
+
+
+def update_strategy(greenhouse_id: str, username: str, update: dict):
+    if not verify_greenhouse_existence(greenhouse_id):
+        return None, 'greenhouse_not_available'
+    if not verify_greenhouse_ownership(greenhouse_id, username):
+        return None, 'greenhouse_not_available'
+
+    with open(STRATEGIES_FILE, 'r') as f:
+        strategies = json.load(f)
+    if greenhouse_id not in strategies:
+        return None, 'strategy_not_found'
+
+    current = strategies[greenhouse_id]
+
+    if 'targets' in update and isinstance(update['targets'], dict):
+        for k, v in update['targets'].items():
+            if isinstance(v, dict):
+                mn = v.get('min')
+                mx = v.get('max')
+                if mn is not None and mx is not None and mn >= mx:
+                    return None, f'invalid_range_{k}'
+                current.setdefault('targets', {})
+                cur = current['targets'].get(k, {})
+                cur.update(v)
+                current['targets'][k] = cur
+
+    if 'controls' in update and isinstance(update['controls'], dict):
+        roles_ok = _available_roles_in_greenhouse(greenhouse_id)
+        for role, ctrl_patch in update['controls'].items():
+            if role not in roles_ok:
+                return None, f'role_not_available:{role}'
+            base = current['controls'].get(role, {})
+            if not isinstance(ctrl_patch, dict):
+                return None, f'invalid_control:{role}'
+            base.update(ctrl_patch)
+            current['controls'][role] = base
+
+    strategies[greenhouse_id] = current
+    with open(STRATEGIES_FILE, 'w') as f:
+        json.dump(strategies, f, indent=2)
+    return current, None
+
 
 
 if __name__ == '__main__':

@@ -29,5 +29,12 @@
     "owner": null,
     "name": null,
     "devices": []
+  },
+  "b821fa4d-a11e-4d1a-96ba-2222cc7a8369": {
+    "owner": "steurendo",
+    "name": "CasaVerde",
+    "devices": [
+      "9b05a2d1-d60d-4b9c-ba1f-a9d1a2bf9e3b"
+    ]
   }
 }
