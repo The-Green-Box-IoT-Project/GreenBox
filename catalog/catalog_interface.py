@@ -2,7 +2,7 @@ import json
 from os import path
 from pathlib import Path
 from pprint import pprint
-
+from mongo_adapter import MongoAdapter
 from catalog.token import Token
 
 P = Path(__file__).parent.absolute()
@@ -90,28 +90,14 @@ def retrieve_username_by_token(token_http):
 
 
 # Existence
-def verify_greenhouse_existence(greenhouse_id):
-    """
-    Used to verify that a specified greenhouse is registered. This is
-    to prevent that a user can claim a greenhouse that is not registered.
-    """
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    if greenhouse_id in greenhouses:
-        return True
-    return False
+def verify_device_existence(self, device_id: str) -> bool:
+        device = mongo_adapter.retrieve_device(device_id)
+        return bool(device)  # Restituisce True se il dispositivo esiste
 
 
-def verify_device_existence(device_id):
-    """
-    Used to verify that a specified device is registered. This is
-    to prevent that a user can associate a device that is not registered.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    if device_id in devices:
-        return True
-    return False
+def verify_greenhouse_existence(self, greenhouse_id: str) -> bool:
+        greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
+        return bool(greenhouse)  # Restituisce True se la serra esiste
 
 
 # Ownership

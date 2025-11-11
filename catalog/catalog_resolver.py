@@ -9,6 +9,10 @@ import catalog_interface
 from catalog_dispatcher import CatalogGetRequest, CatalogPostRequest, CatalogPutRequest, CatalogDeleteRequest
 from generator import generator
 from pathlib import Path
+from mongo_adapter import MongoAdapter
+
+# Instanziare l'adapter Mongo (in production, passa l'URI dal config)
+mongo_adapter = MongoAdapter("mongodb://localhost:27017", "greenbox")
 
 load_dotenv()
 ENV_PATH = Path(__file__).parent / '.env'   # forza la .env nella cartella del catalog
@@ -230,38 +234,31 @@ class CatalogGetResolver:
         }
 
     @staticmethod
-    def _retrieve_greenhouses(headers):
-        """
-        Called by a user that wants to retrieve its set of greenhouses.
-        path: retrieve/greenhouses
-        query: -
-        auth: token
-        """
-        token = validate_authentication(headers)
+    def _retrieve_greenhouses(query):
+        token = query['token']
         username = catalog_interface.retrieve_username_by_token(token)
-        greenhouses = catalog_interface.retrieve_greenhouses(username)
+        
+        # Chiamata al MongoDB Adapter per recuperare le serre dell'utente
+        greenhouses = mongo_adapter.retrieve_greenhouses(username)
+        
         response = {
             'greenhouses': greenhouses
         }
         return response
 
     @staticmethod
-    def _retrieve_devices(query, headers):
-        """
-        Called by a user that wants to retrieve the devices associated
-        with a greenhouse.
-        path: retrieve/devices
-        query: greenhouse_id
-        auth: token
-        """
-        token = validate_authentication(headers)
+    def _retrieve_devices(query):
+        token = query['token']
         greenhouse_id = query['greenhouse_id']
         username = catalog_interface.retrieve_username_by_token(token)
-        # Greenhouse ownership verification
-        is_greenhouse_owned = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
-        if not is_greenhouse_owned:
+        
+        # Verifica la proprietà della serra (Mongo)
+        if not mongo_adapter.verify_greenhouse_ownership(greenhouse_id, username):
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_available')
-        devices = catalog_interface.retrieve_devices(greenhouse_id)
+        
+        # Chiamata al MongoDB Adapter per recuperare i dispositivi
+        devices = mongo_adapter.retrieve_devices_in_greenhouse(greenhouse_id)
+        
         response = {'devices': devices}
         return response
 
@@ -545,44 +542,34 @@ class CatalogPutResolver:
         catalog_interface.associate_greenhouse(greenhouse_id, greenhouse_name, username)
 
     @staticmethod
+     
     def _associate_device(query, headers):
-        """
-        Called by a user that wants to associate a new device to its
-        greenhouse.
-        path: associate/device
-        query: device_id, device_name, greenhouse_id
-        auth: token
-        """
         token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
         device_id = query['device_id']
-        device_name = query['device_name']
         greenhouse_id = query['greenhouse_id']
-        # Device registration verification
-        is_device_registered = catalog_interface.verify_device_existence(device_id)
-        if not is_device_registered:
-            raise cherrypy.HTTPError(status=404, message='device_not_available')
-        # Device ownership verification
-        is_device_owned = catalog_interface.verify_device_ownership(device_id, username)
-        if is_device_owned:
-            raise cherrypy.HTTPError(status=403, message='device_already_associated')
-        # Device availability verification
-        is_device_available = catalog_interface.is_device_available(device_id)
-        if not is_device_available:
-            raise cherrypy.HTTPError(status=404, message='device_not_available')
-        # Greenhouse registration verification
-        is_greenhouse_registered = catalog_interface.verify_greenhouse_existence(greenhouse_id)
-        if not is_greenhouse_registered:
-            raise cherrypy.HTTPError(status=404, message='greenhouse_not_available')
-        # Greenhouse ownership verification
-        is_greenhouse_owned = catalog_interface.verify_greenhouse_ownership(greenhouse_id, username)
-        if not is_greenhouse_owned:
-            raise cherrypy.HTTPError(status=404, message='greenhouse_not_available')
-        # Device association
-        catalog_interface.associate_device(device_id, greenhouse_id, device_name, username)
 
+        # Verifica se il dispositivo esiste e se la serra è registrata
+        if not mongo_adapter.verify_device_existence(device_id):
+            raise cherrypy.HTTPError(status=404, message='device_not_available')
+        if not mongo_adapter.verify_greenhouse_existence(greenhouse_id):
+            raise cherrypy.HTTPError(status=404, message='greenhouse_not_available')
+
+        # Associa il dispositivo alla serra
+        success = mongo_adapter.associate_device_with_greenhouse(device_id, greenhouse_id)
+        if not success:
+            raise cherrypy.HTTPError(status=400, message="failed_to_associate_device")
+        
+        return {'status': 'success', 'message': f"Device {device_id} associated to greenhouse {greenhouse_id}"}
 
 class CatalogDeleteResolver:
     @staticmethod
     def resolve(request: CatalogDeleteRequest, query, headers):
         pass
+class CatalogInterface:
+    def verify_device_existence(self, device_id: str) -> bool:
+        device = mongo_adapter.retrieve_device(device_id)
+        return bool(device)  # Restituisce True se il dispositivo esiste
+def verify_greenhouse_existence(self, greenhouse_id: str) -> bool:
+        greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
+        return bool(greenhouse)  # Restituisce True se la serra esiste
