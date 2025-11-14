@@ -1,9 +1,21 @@
 {
   "alice88": {
-    "nome": "Alice",
+    "name": "Alice",
     "surname": "Brambilla",
     "password": "secret",
     "address": "corso Belgio 12",
-    "telefono": "3287580661"
+    "telefono": "3287580661",
+    "greenhouses": []
+  },
+  "senpai": {
+    "name": "Senpai",
+    "surname": "User",
+    "email": "senpai@example.com",
+    "greenhouses": [
+      {
+        "greenhouse_id": "GH_001",
+        "name": "My First Greenhouse"
+      }
+    ]
   }
 }

@@ -2,8 +2,8 @@ import json
 from os import path
 from pathlib import Path
 from pprint import pprint
-from mongo_adapter import MongoAdapter
-from catalog.token import Token
+from greenbox.MongoDB.Mongo_DB_adapter import MongoAdapter
+#from catalog.token import Token
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
@@ -372,4 +372,4 @@ def update_strategy(greenhouse_id: str, username: str, update: dict):
 
 
 if __name__ == '__main__':
-    pprint(retrieve_greenhouses('senpai'))
+    pprint(retrieve_greenhouses('alice88'))

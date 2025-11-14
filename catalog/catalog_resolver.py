@@ -21,13 +21,14 @@ SERVICE_FILE = Path(__file__).resolve().parent / 'services' / 'services.json'
 
 
 def validate_authentication(headers):
-    if 'token' not in headers:
-        raise cherrypy.HTTPError(status=401)
-    token = headers['token']
-    is_token_valid = catalog_interface.verify_token(token)
-    if not is_token_valid:
-        raise cherrypy.HTTPError(status=401)
-    return token
+    #if 'token' not in headers:
+     #   raise cherrypy.HTTPError(status=401)
+    #token = headers['token']
+    #is_token_valid = catalog_interface.verify_token(token)
+    #if not is_token_valid:
+     #   raise cherrypy.HTTPError(status=401)
+    #return token
+    return True  # Temporaneo: disabilita l'autenticazione per test locali
 
 
 def admin_authentication(headers):
@@ -58,18 +59,24 @@ class CatalogGetResolver:
             case CatalogGetRequest.GET_CROPS:
                 return CatalogGetResolver._get_crops()
             case CatalogGetRequest.GET_DEVICES:
-                return CatalogGetResolver._get_devices(query)
+                return CatalogGetResolver._get_devices(query, headers)
             case CatalogGetRequest.SERVICE_OVERVIEW:
                 return CatalogGetResolver._service_overview(query)
             case CatalogGetRequest.SERVICE_GH_DETAIL:
                 return CatalogGetResolver._service_gh_detail(query)
+            case CatalogGetRequest.SERVICE_OVERVIEW:
+                return CatalogGetResolver._service_overview(query, headers)
+            case CatalogGetRequest.SERVICE_GH_DETAIL:
+                return CatalogGetResolver._service_gh_detail(query, headers)
+
         raise cherrypy.HTTPError(status=400)
 
     @staticmethod
-    def _service_overview(query):
-        token = query.get('token')
-        if not catalog_interface.verify_token(token):
-            raise cherrypy.HTTPError(status=401, message='invalid_token')
+    def _service_overview(query, headers):
+        #token = query.get('token')
+        #if not catalog_interface.verify_token(token):
+            #raise cherrypy.HTTPError(status=401, message='invalid_token')
+        token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
         user_ghs = set(catalog_interface.retrieve_greenhouses(username))
 
@@ -85,8 +92,10 @@ class CatalogGetResolver:
         return {"greenhouses": out}
 
     @staticmethod
-    def _service_gh_detail(query):
-        token = query.get('token')
+    def _service_gh_detail(query, headers):
+        #token = query.get('token')
+        token = validate_authentication(headers)
+        username = catalog_interface.retrieve_username_by_token(token)
         gh_id = query.get('id')
         if not gh_id:
             raise cherrypy.HTTPError(status=400, message='missing_greenhouse_id')
@@ -106,11 +115,16 @@ class CatalogGetResolver:
         return state.get(gh_id, {"devices": {}, "last_update": None})
 
     @staticmethod
-    def _get_devices(query):
-        token = query['token']
-        if not catalog_interface.verify_token(token):
-            raise cherrypy.HTTPError(status=401, message='invalid_token')
+    def _get_devices(query, headers):
+        #token = query['token']
+        #if not catalog_interface.verify_token(token):
+         #   raise cherrypy.HTTPError(status=401, message='invalid_token')
+        #username = catalog_interface.retrieve_username_by_token(token)
+        #gh_id = query['greenhouse_id']
+        token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
+        
+
 
         gh_id = query['greenhouse_id']
         if (not catalog_interface.verify_greenhouse_existence(gh_id) or
@@ -281,29 +295,49 @@ class CatalogPostResolver:
             case CatalogPostRequest.TOKEN_LOGIN:
                 response = CatalogPostResolver._token_login(query)
             case CatalogPostRequest.SET_CROP:
-                response = CatalogPostResolver._set_crop(query)
+                response = CatalogPostResolver._set_crop(query, headers)
+            case CatalogGetRequest.SERVICE_OVERVIEW:
+                return CatalogGetResolver._service_overview(query, headers)
+            case CatalogGetRequest.SERVICE_GH_DETAIL:
+                return CatalogGetResolver._service_gh_detail(query, headers)
+
+                
         return response
+    
 
     @staticmethod
-    def _set_crop(query):
-        """
-        path: greenhouse/crop
-        query: greenhouse_id, crop, token
-        """
-        token = query.get('token')
-        if not catalog_interface.verify_token(token):
-            raise cherrypy.HTTPError(status=401, message='invalid_token')
-        username = catalog_interface.retrieve_username_by_token(token)
-        gh_id = query.get('greenhouse_id')
-        crop = query.get('crop')
-
-        strat, err = catalog_interface.set_crop_for_greenhouse(gh_id, crop, username)
-        if err:
+    def _set_crop(query, headers):
+     token = validate_authentication(headers)
+     username = catalog_interface.retrieve_username_by_token(token)
+     gh_id = query.get('greenhouse_id')
+     crop = query.get('crop')
+     strat, err = catalog_interface.set_crop_for_greenhouse(gh_id, crop, username)
+     if err:
             if err in ('greenhouse_not_available','crop_not_found','strategy_not_found'):
                 raise cherrypy.HTTPError(status=404, message=err)
             raise cherrypy.HTTPError(status=400, message=err)
+     return {"msg": "crop_set", "greenhouse_id": gh_id, "strategy": strat}
+    
+    @staticmethod
+    #def _set_crop(query):
+    #    """
+    #    path: greenhouse/crop
+    #    query: greenhouse_id, crop, token
+    #    """
+    #    token = query.get('token')
+    #    if not catalog_interface.verify_token(token):
+    #        raise cherrypy.HTTPError(status=401, message='invalid_token')
+    #    username = catalog_interface.retrieve_username_by_token(token)
+    #    gh_id = query.get('greenhouse_id')
+    #    crop = query.get('crop')
 
-        return {"msg": "crop_set", "greenhouse_id": gh_id, "strategy": strat}
+    #    strat, err = catalog_interface.set_crop_for_greenhouse(gh_id, crop, username)
+    #    if err:
+    #        if err in ('greenhouse_not_available','crop_not_found','strategy_not_found'):
+    #            raise cherrypy.HTTPError(status=404, message=err)
+    #        raise cherrypy.HTTPError(status=400, message=err)
+
+    #    return {"msg": "crop_set", "greenhouse_id": gh_id, "strategy": strat}
 
     @staticmethod
     def _token_login(query):
@@ -419,6 +453,12 @@ class CatalogPutResolver:
                 response = CatalogPutResolver._update_device_status(query)
             case CatalogPutRequest.UPDATE_STRATEGY:
                 response = CatalogPutResolver._update_strategy(query)
+            case CatalogPostRequest.SET_CROP:
+                response = CatalogPostResolver._set_crop(query, headers)
+            case CatalogPutRequest.UPDATE_STRATEGY:
+                response = CatalogPutResolver._update_strategy(query, headers)
+
+
 
     @staticmethod
     def _update_device_status(query):
@@ -483,36 +523,53 @@ class CatalogPutResolver:
         with open(SERVICE_FILE, 'w') as f:
             json.dump(state, f, indent=2)
 
-
+    #new version update_strategy
     @staticmethod
-    def _update_strategy(query):
-        """
-        path: strategy
-        query: greenhouse_id, update, token
-        dove 'update' è una stringa JSON, es:
-        {"targets":{"temperature":{"min":21,"max":27}},
-         "controls":{"ventilation_system":{"hysteresis":1.2}}}
-        """
-        token = query.get('token')
-        if not catalog_interface.verify_token(token):
-            raise cherrypy.HTTPError(status=401, message='invalid_token')
-        username = catalog_interface.retrieve_username_by_token(token)
-
-        gh_id = query.get('greenhouse_id')
-        raw = query.get('update')
-        try:
+    def _update_strategy(query, headers):
+      token = validate_authentication(headers)
+      username = catalog_interface.retrieve_username_by_token(token)
+      gh_id = query.get('greenhouse_id')
+      raw = query.get('update')
+      try:
             update = json.loads(raw)
-        except Exception:
+      except Exception:
             raise cherrypy.HTTPError(status=400, message='invalid_update_json')
 
-        strat, err = catalog_interface.update_strategy(gh_id, username, update)
-        if err:
+      strat, err = catalog_interface.update_strategy(gh_id, username, update)
+      if err:
             code = 404 if err in ('greenhouse_not_available', 'strategy_not_found') or err.startswith(
                 'role_not_available') else 400
             raise cherrypy.HTTPError(status=code, message=err)
+      return {"msg": "strategy_updated", "greenhouse_id": gh_id, "strategy": strat}
 
-        return {"msg": "strategy_updated", "greenhouse_id": gh_id, "strategy": strat}
+    #@staticmethod
+    #def _update_strategy(query):
+     #   """
+      #  path: strategy
+      #  query: greenhouse_id, update, token
+      #  dove 'update' è una stringa JSON, es:
+      #  {"targets":{"temperature":{"min":21,"max":27}},
+       #  "controls":{"ventilation_system":{"hysteresis":1.2}}}
+       # """
+       # token = query.get('token')
+       # if not catalog_interface.verify_token(token):
+       #     raise cherrypy.HTTPError(status=401, message='invalid_token')
+       # username = catalog_interface.retrieve_username_by_token(token)
 
+     #   gh_id = query.get('greenhouse_id')
+     #   raw = query.get('update')
+     #   try:
+      #      update = json.loads(raw)
+      #  except Exception:
+      #      raise cherrypy.HTTPError(status=400, message='invalid_update_json')
+
+      #  strat, err = catalog_interface.update_strategy(gh_id, username, update)
+     #   if err:
+     #       code = 404 if err in ('greenhouse_not_available', 'strategy_not_found') or err.startswith(
+     #           'role_not_available') else 400
+     #       raise cherrypy.HTTPError(status=code, message=err)
+
+      #  return {"msg": "strategy_updated", "greenhouse_id": gh_id, "strategy": strat}
 
     @staticmethod
     def _associate_greenhouse(query, headers):

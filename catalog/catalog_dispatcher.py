@@ -65,15 +65,20 @@ class CatalogGetDispatcher:
 
     @staticmethod
     def _is_get_devices_request(path, query):
-        return len(path) == 1 and path[0] == 'devices' and {'greenhouse_id', 'token'}.issubset(query)
+        #tolto 'token' dai campi obbligatori
+        return len(path) == 1 and path[0] == 'devices' and {'greenhouse_id'}.issubset(query)
 
     @staticmethod
-    def _is_get_crops_request(path, query):
-        """
-        path: crops
-        query: (opzionale) token per UI autenticata
-        """
-        return len(path) == 1 and path[0] == 'crops'
+    #def _is_get_crops_request(path, query):
+    #    """
+    #    path: crops
+    #    query: (opzionale) token per UI autenticata
+    #    """
+    #    return len(path) == 1 and path[0] == 'crops'
+    def _is_set_crop_request(path, query):
+        if len(path) != 2 or path[0] != 'greenhouse' or path[1] != 'crop':
+          return False
+        return {'greenhouse_id', 'crop'}.issubset(query)
 
 
     @staticmethod
@@ -312,7 +317,8 @@ class CatalogPutDispatcher:
         """
         if len(path) != 1 or path[0] != 'strategy':
             return False
-        return {'greenhouse_id','update','token'}.issubset(query)
+        #tolto 'token' dai campi obbligatori
+        return {'greenhouse_id','update'}.issubset(query)
 
     @staticmethod
     def _is_associate_greenhouse_request(path, query):

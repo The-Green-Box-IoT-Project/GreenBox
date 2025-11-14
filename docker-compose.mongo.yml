@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: greenbox-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: greenbox
+    volumes:
+      - mongo-data:/data/db
+      - ./Adapters/mongo/init:/docker-entrypoint-initdb.d:ro
+
+  mongo-adapter:
+    build: ./Adapters/mongo
+    container_name: greenbox-mongo-adapter
+    restart: unless-stopped
+    environment:
+      MONGO_URI: "mongodb://root:rootpassword@mongo:27017/"
+      MONGO_DB: "greenbox"
+    ports:
+      - "8082:8082"
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-data:
