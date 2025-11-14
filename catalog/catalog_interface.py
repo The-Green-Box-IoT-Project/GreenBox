@@ -2,8 +2,11 @@ import json
 from os import path
 from pathlib import Path
 from pprint import pprint
-from greenbox.MongoDB.Mongo_DB_adapter import MongoAdapter
-#from catalog.token import Token
+from Adapters.mongo.Mongo_DB_adapter import MongoAdapter
+import os
+import requests
+
+from .auth_token import Token
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
@@ -15,6 +18,7 @@ DEVICES_LEGEND_FILE = P / 'devices_legend.json'
 ROOT_DIR = P.parent
 STRATEGIES_FILE = ROOT_DIR / 'Control_Strategies' / 'strategies.json'
 CROP_PROFILES_FILE = ROOT_DIR / 'Control_Strategies' / 'crop_profiles.json'
+MONGO_ADAPTER_URL = os.getenv("MONGO_ADAPTER_URL", "http://127.0.0.1:8082")
 
 
 def init():
@@ -369,6 +373,23 @@ def update_strategy(greenhouse_id: str, username: str, update: dict):
         json.dump(strategies, f, indent=2)
     return current, None
 
+def retrieve_greenhouses_from_mongo(username: str):
+    """
+    Test: invece di leggere da greenhouses.json, chiediamo le serre
+    al microservizio Mongo Adapter.
+    username -> usato come 'tenant' per il filtro.
+    """
+    url = f"{MONGO_ADAPTER_URL}/greenhouses"
+    try:
+        resp = requests.get(url, params={"username": username}, timeout=5)
+        resp.raise_for_status()
+    except Exception as e:
+        print("Errore chiamando Mongo Adapter:", e)
+        return []
+
+    data = resp.json()
+    # Il resolver originale si aspetta una lista di ID serre
+    return [gh.get("greenhouse_id") for gh in data.get("items", []) if gh.get("greenhouse_id")]
 
 
 if __name__ == '__main__':

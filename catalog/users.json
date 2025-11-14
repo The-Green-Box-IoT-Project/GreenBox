@@ -5,7 +5,7 @@
     "password": "secret",
     "address": "corso Belgio 12",
     "telefono": "3287580661",
-    "greenhouses": []
+    "greenhouses": ["gh01"]
   },
   "senpai": {
     "name": "Senpai",

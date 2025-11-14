@@ -1,6 +1,7 @@
 from enum import Enum, auto
 
 
+
 class CatalogGetRequest(Enum):
     NOT_FOUND = auto(),
     RETRIEVE_BROKER = auto(),

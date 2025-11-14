@@ -5,11 +5,11 @@ import time
 import cherrypy
 from dotenv import load_dotenv
 
-from . import catalog_interface
-from .catalog_dispatcher import CatalogGetRequest, CatalogPostRequest, CatalogPutRequest, CatalogDeleteRequest
-from .generator import generator
+import catalog_interface
+from catalog_dispatcher import CatalogGetRequest, CatalogPostRequest, CatalogPutRequest, CatalogDeleteRequest
+from generator import generator
 from pathlib import Path
-from Adapters.mongo.Mongo_DB_adapter import MongoAdapter
+from mongo_adapter import MongoAdapter
 
 # Instanziare l'adapter Mongo (in production, passa l'URI dal config)
 mongo_adapter = MongoAdapter("mongodb://localhost:27017", "greenbox")
@@ -251,9 +251,9 @@ class CatalogGetResolver:
     def _retrieve_greenhouses(query):
         token = query['token']
         username = catalog_interface.retrieve_username_by_token(token)
-        # greenhouses = catalog_interface.retrieve_greenhouses(username)
+        
         # Chiamata al MongoDB Adapter per recuperare le serre dell'utente
-        greenhouses = catalog_interface.retrieve_greenhouses_from_mongo(username)
+        greenhouses = mongo_adapter.retrieve_greenhouses(username)
         
         response = {
             'greenhouses': greenhouses
