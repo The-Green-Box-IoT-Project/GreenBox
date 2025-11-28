@@ -1,7 +1,7 @@
 # Adapters/mongo/app.py
 import os
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 
@@ -20,19 +20,22 @@ def health():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 @app.get("/greenhouses")
-def list_greenhouses(username: str = Query(...)):
+def list_greenhouses(username: str = Query(None)):
     """
-    Ritorna tutte le serre associate a uno username (tenant).
-    Per il test filtriamo per greenhouse.tenant_id == username.
+    Ritorna le serre. Se username è fornito, filtra per owner == username.
     """
-    items = list(mongo.db.greenhouses.find({"tenant_id": username}, {"_id": 0}))
+    query = {}
+    if username:
+        query["owner"] = username   # oppure "tenant_id" se cambi schema
+
+    items = list(mongo.db.greenhouses.find(query, {"_id": 0}))
     return {"items": items}
+
 
 @app.get("/devices")
 def list_devices(greenhouse_id: str = Query(...)):
     """
     Ritorna i device associati a una greenhouse.
-    Per il test leggiamo collection devices filtrando per greenhouse_id.
     """
     items = list(mongo.db.devices.find({"greenhouse_id": greenhouse_id}, {"_id": 0}))
     return {"items": items}

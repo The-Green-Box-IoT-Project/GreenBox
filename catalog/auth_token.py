@@ -35,12 +35,15 @@ class Token:
             'expiration_time': token.expiration_time,
         }
         json_str = json.dumps(json_obj)
-        crypt_token = cryptofunc.encrypt(bytes(json_str, 'utf-8')).decode('utf-8')
+        # Encrypt bytes to get bytes, then decode to get a string for the JSON response
+        crypt_token = cryptofunc.encrypt(json_str.encode('utf-8')).decode('utf-8')
         return crypt_token
 
     @staticmethod
     def deserialize(crypt_token):
-        json_str = cryptofunc.decrypt(bytes(crypt_token, 'utf-8'))
+        # The token from the header is a string, so we must encode it back to bytes for decryption
+        decrypted_bytes = cryptofunc.decrypt(crypt_token.encode('utf-8'))
+        json_str = decrypted_bytes.decode('utf-8')
         json_obj = json.loads(json_str)
         token = Token(json_obj['username'], json_obj['expiration_time'])
         return token

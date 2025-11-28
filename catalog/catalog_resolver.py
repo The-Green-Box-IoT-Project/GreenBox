@@ -21,14 +21,25 @@ SERVICE_FILE = Path(__file__).resolve().parent / 'services' / 'services.json'
 
 
 def validate_authentication(headers):
-    #if 'token' not in headers:
-     #   raise cherrypy.HTTPError(status=401)
-    #token = headers['token']
-    #is_token_valid = catalog_interface.verify_token(token)
-    #if not is_token_valid:
-     #   raise cherrypy.HTTPError(status=401)
-    #return token
-    return True  # Temporaneo: disabilita l'autenticazione per test locali
+    """
+    Legge il token dagli header HTTP, ne verifica la validità
+    e RITORNA il token come stringa (non un booleano).
+    """
+    # prova con 'token' minuscolo, altrimenti 'Token'
+    token = headers.get('token') or headers.get('Token')
+
+    if not token:
+        # nessun token presente
+        raise cherrypy.HTTPError(status=401, message='token_missing')
+
+    # verifica lato catalog_interface (di solito controlla solo che sia decifrabile)
+    is_valid = catalog_interface.verify_token(token)
+    if not is_valid:
+        raise cherrypy.HTTPError(status=401, message='token_not_valid')
+
+    # 🔧 QUI IL FIX: ritorniamo il token stringa, non il bool
+    return token
+
 
 
 def admin_authentication(headers):
@@ -248,33 +259,44 @@ class CatalogGetResolver:
         }
 
     @staticmethod
-    def _retrieve_greenhouses(query):
-        token = query['token']
+    def _retrieve_greenhouses(headers):
+        token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
-        # greenhouses = catalog_interface.retrieve_greenhouses(username)
-        # Chiamata al MongoDB Adapter per recuperare le serre dell'utente
         greenhouses = catalog_interface.retrieve_greenhouses_from_mongo(username)
-        
-        response = {
-            'greenhouses': greenhouses
-        }
-        return response
+        return {"greenhouses": greenhouses}
+
 
     @staticmethod
-    def _retrieve_devices(query):
-        token = query['token']
-        greenhouse_id = query['greenhouse_id']
+        
+    def _retrieve_devices(query, headers):
+        """
+        Called by a user that wants to retrieve the devices associated
+        with a greenhouse.
+        path: retrieve/devices
+        query: greenhouse_id
+        auth: token (header 'token')
+        """
+        # 1) Validazione token dagli header
+        token = validate_authentication(headers)
         username = catalog_interface.retrieve_username_by_token(token)
-        
-        # Verifica la proprietà della serra (Mongo)
-        if not mongo_adapter.verify_greenhouse_ownership(greenhouse_id, username):
-            raise cherrypy.HTTPError(status=404, message='greenhouse_not_available')
-        
-        # Chiamata al MongoDB Adapter per recuperare i dispositivi
-        devices = mongo_adapter.retrieve_devices_in_greenhouse(greenhouse_id)
-        
-        response = {'devices': devices}
+
+        # 2) Leggi greenhouse_id dalla query
+        greenhouse_id = query["greenhouse_id"]
+
+        # 3) Verifica ownership (per ora ancora via catalog_interface)
+        is_greenhouse_owned = catalog_interface.verify_greenhouse_ownership(
+            greenhouse_id,
+            username
+        )
+        if not is_greenhouse_owned:
+            raise cherrypy.HTTPError(status=404, message="greenhouse_not_available")
+
+        # 4) Recupera i devices via catalog_interface -> Mongo Adapter
+        devices = catalog_interface.get_greenhouse_devices(greenhouse_id)
+
+        response = {"devices": devices}
         return response
+
 
 
 class CatalogPostResolver:

@@ -2,7 +2,7 @@
   "rb00101": {
     "label": "serra balcone",
     "owner": "alice88",
-    "greenhouse_id": "gh001",
+    "greenhouse_id": "GH_001",
     "sensors": [
       "dht11",
       "soilmoisture01",
