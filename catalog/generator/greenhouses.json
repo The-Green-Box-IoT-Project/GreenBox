@@ -1,14 +1,1 @@
-{
-  "GH_001": {
-    "owner": "alice88",
-    "name": "SerraAlice",
-    "raspberry": [
-      "rb00101"
-    ],
-    "actuators": [
-      "fan01",
-      "heater01",
-      "irrigation01"
-    ]
-  }
-}
+{"gh01": {"owner": "alice", "name": "SerraAlice", "raspberry": ["rb00101"], "actuators": ["fan01", "heater01", "irrigation01"]}, "gh_test": {"owner": null, "name": null, "devices": []}, "gh_test_2": {"owner": null, "name": null, "devices": []}, "gh_admin_001": {"owner": null, "name": null, "devices": []}}

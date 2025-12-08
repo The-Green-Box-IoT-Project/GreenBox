@@ -18,10 +18,18 @@ DEVICES_LEGEND_FILE = P / 'devices_legend.json'
 ROOT_DIR = P.parent
 STRATEGIES_FILE = ROOT_DIR / 'Control_Strategies' / 'strategies.json'
 CROP_PROFILES_FILE = ROOT_DIR / 'Control_Strategies' / 'crop_profiles.json'
-# --- Config per Mongo Adapter ---
-USE_MONGO_ADAPTER = os.getenv("USE_MONGO_ADAPTER", "0") == "1"
 MONGO_ADAPTER_URL = os.getenv("MONGO_ADAPTER_URL", "http://127.0.0.1:8082")
+MONGO_URI = os.getenv("CATALOG_MONGO_URI", os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+MONGO_DB = os.getenv("CATALOG_MONGO_DB", os.getenv("MONGO_DB", "greenbox"))
+mongo_adapter = MongoAdapter(MONGO_URI, MONGO_DB)
 
+
+def _load_json_catalog(catalog_path: Path) -> dict:
+    try:
+        with open(catalog_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
 
 def init():
@@ -97,14 +105,20 @@ def retrieve_username_by_token(token_http):
 
 
 # Existence
-def verify_device_existence(self, device_id: str) -> bool:
-        device = MongoAdapter.retrieve_device(device_id)
-        return bool(device)  # Restituisce True se il dispositivo esiste
+def verify_device_existence(device_id: str) -> bool:
+    device = mongo_adapter.retrieve_device(device_id)
+    if device:
+        return True
+    devices = _load_json_catalog(DEVICES_FILE)
+    return device_id in devices
 
 
-def verify_greenhouse_existence(self, greenhouse_id: str) -> bool:
-        greenhouse = MongoAdapter.retrieve_greenhouse(greenhouse_id)
-        return bool(greenhouse)  # Restituisce True se la serra esiste
+def verify_greenhouse_existence(greenhouse_id: str) -> bool:
+    greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
+    if greenhouse:
+        return True
+    greenhouses = _load_json_catalog(GREENHOUSES_FILE)
+    return greenhouse_id in greenhouses
 
 
 # Ownership
@@ -112,46 +126,29 @@ def retrieve_greenhouse_ownership(greenhouse_id):
     """
     Used to retrieve the owner of a specific greenhouse
     """
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    return greenhouses[greenhouse_id]['owner']
+    greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
+    if greenhouse:
+        return greenhouse.get('tenant_id')
+    greenhouses = _load_json_catalog(GREENHOUSES_FILE)
+    return (greenhouses.get(greenhouse_id, {}) or {}).get('owner')
 
 
 def retrieve_device_ownership(device_id):
     """
     Used to retrieve the owner of a specific device
     """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    return devices[device_id]['owner']
+    device = mongo_adapter.retrieve_device(device_id)
+    if device:
+        return device.get('owner')
+    devices = _load_json_catalog(DEVICES_FILE)
+    return (devices.get(device_id, {}) or {}).get('owner')
 
 
-def verify_greenhouse_ownership(greenhouse_id: str, username: str) -> bool:
+def verify_greenhouse_ownership(greenhouse_id, username):
     """
-    Verifica che la serra greenhouse_id appartenga all'utente username.
-    Se USE_MONGO_ADAPTER=1, controlla su Mongo via Mongo Adapter.
-    Altrimenti usa la logica legacy basata su JSON.
+    Used to verify if a greenhouse is owned by the user.
     """
-    if USE_MONGO_ADAPTER:
-        # Usa direttamente la funzione Mongo che abbiamo già
-        try:
-            greenhouses = _mongo_retrieve_greenhouses(username)
-        except Exception as e:
-            print(f"[catalog_interface] ERROR in verify_greenhouse_ownership (Mongo): {e}")
-            return False
-
-        for gh in greenhouses:
-            if gh.get("id") == greenhouse_id:
-                return True
-        return False
-
-    # --- Fallback legacy (se non usi il Mongo Adapter) ---
-    greenhouses = retrieve_greenhouses(username)
-    for gh in greenhouses:
-        if gh.get("id") == greenhouse_id:
-            return True
-    return False
-
+    return retrieve_greenhouse_ownership(greenhouse_id) == username
 
 
 def verify_device_ownership(device_id, username):
@@ -165,130 +162,27 @@ def is_greenhouse_available(greenhouse_id):
     """
     Returns true if a greenhouse is available.
     """
-    return retrieve_greenhouse_ownership(greenhouse_id) is None
+    owner = retrieve_greenhouse_ownership(greenhouse_id)
+    return owner is None
 
 
 def is_device_available(device_id):
     """
     Returns true if a device is available and ready to be associated to a greenhouse.
     """
-    return retrieve_device_ownership(device_id) is None
+    device = mongo_adapter.retrieve_device(device_id)
+    if device:
+        return not device.get('greenhouse_id') and not device.get('associated_greenhouse')
+    devices = _load_json_catalog(DEVICES_FILE)
+    entry = devices.get(device_id)
+    if not entry:
+        return False
+    associated = entry.get('associated_greenhouse') or entry.get('greenhouse_id')
+    return associated is None
 
 
-# Retrieving# ================== NUOVE FUNZIONI AD ALTO LIVELLO (Mongo / JSON) ==================
-
-def get_user_greenhouses(username: str):
-    """
-    Entry point 'pulito' per il resolver:
-    se USE_MONGO_ADAPTER=1 va su Mongo Adapter,
-    altrimenti usa il vecchio catalogo JSON.
-    """
-    if USE_MONGO_ADAPTER:
-        return _mongo_retrieve_greenhouses(username)
-    # fallback legacy
-    return retrieve_greenhouses(username)
-
-
-def get_greenhouse_devices(greenhouse_id: str):
-    """
-    Entry point 'pulito' per recuperare i devices di una serra.
-    """
-    if USE_MONGO_ADAPTER:
-        return _mongo_retrieve_devices(greenhouse_id)
-    return retrieve_devices(greenhouse_id)
-
-# ================== IMPLEMENTAZIONI MONGO ADAPTER ==================
-
-def _mongo_retrieve_greenhouses(username: str):
-    """
-    Chiama il Mongo Adapter /greenhouses e trasforma il risultato
-    nel formato atteso dalla UI del catalog:
-    [
-      {
-        "id": <greenhouse_id>,
-        "name": <nome serra>,
-        "devices": [ { "id": ..., "name": ..., "type": ..., "role": ... }, ... ]
-      },
-      ...
-    ]
-    """
-    url = f"{MONGO_ADAPTER_URL}/greenhouses"
-    params = {"username": username}
-    try:
-        resp = requests.get(url, params=params, timeout=3)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        # per ora logga solo su stdout, niente crash strano
-        print(f"[catalog_interface] ERROR calling Mongo Adapter /greenhouses: {e}")
-        # facciamo fallback ai JSON per non rompere tutto
-        return retrieve_greenhouses(username)
-
-    raw_ghs = data.get("items", [])
-    out = []
-
-    # Per ogni serra, faccio una seconda chiamata /devices?greenhouse_id=...
-    for gh in raw_ghs:
-        gh_id = gh.get("greenhouse_id") or gh.get("id")
-        if not gh_id:
-            continue
-
-        # nome: prendo label, name o greenhouse_id come fallback
-        gh_name = gh.get("label") or gh.get("name") or gh_id
-
-        # carico i devices da Mongo
-        devices = _mongo_retrieve_devices(gh_id)
-        out.append({
-            "id": gh_id,
-            "name": gh_name,
-            "devices": devices or []
-        })
-
-    return out
-
-
-def _mongo_retrieve_devices(greenhouse_id: str):
-    """
-    Chiama il Mongo Adapter /devices?greenhouse_id=...
-    e ritorna una lista di device in formato semplice:
-    [
-      { "id": <device_id>, "name": <name>, "type": <type>, "role": <role>, "device_type": <type> },
-      ...
-    ]
-    """
-    url = f"{MONGO_ADAPTER_URL}/devices"
-    params = {"greenhouse_id": greenhouse_id}
-    try:
-        resp = requests.get(url, params=params, timeout=3)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        print(f"[catalog_interface] ERROR calling Mongo Adapter /devices: {e}")
-        return []
-
-    raw_devs = data.get("items", [])
-    out = []
-    for d in raw_devs:
-        dev_id = d.get("device_id")
-        if not dev_id:
-            continue
-
-        # Nel DB abbiamo 'type' e 'role'
-        dev_type = d.get("type")
-        dev_role = d.get("role")
-
-        out.append({
-            "id": dev_id,
-            "name": d.get("name", dev_id),
-            "type": dev_type,          # es. 'raspberry' o 'actuator'
-            "role": dev_role,          # es. 'controller', 'fan', ...
-            "device_type": dev_type,   # lo duplichiamo per compatibilità con la UI
-        })
-    return out
-
-# ================== IMPLEMENTAZIONI LEGACY JSON ==================
+# Retrieving
 def retrieve_greenhouses(username):
-    
     """
     Used to retrieve all the greenhouses owned by the given user.
     """
@@ -378,9 +272,14 @@ def retrieve_device_association(device_id):
     Used to retrieve the greenhouse associated to the given device.
     Note: if device is not associated, it will return None.
     """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    return devices[device_id]['associated_greenhouse']
+    device = mongo_adapter.retrieve_device(device_id)
+    if device:
+        return device.get('greenhouse_id') or device.get('associated_greenhouse')
+    devices = _load_json_catalog(DEVICES_FILE)
+    entry = devices.get(device_id)
+    if not entry:
+        return None
+    return entry.get('associated_greenhouse') or entry.get('greenhouse_id')
 
 
 # ------------------- DEVICE STATUS (anagrafica: legacy; runtime in services.json) -------------------
@@ -516,10 +415,17 @@ def retrieve_greenhouses_from_mongo(username: str):
     username -> usato come 'tenant' per il filtro.
     """
     url = f"{MONGO_ADAPTER_URL}/greenhouses"
-    resp = requests.get(url, params={"username": username}, timeout=5)
+    try:
+        resp = requests.get(url, params={"username": username}, timeout=5)
+        resp.raise_for_status()
+    except Exception as e:
+        print("Errore chiamando Mongo Adapter:", e)
+        return []
+
     data = resp.json()
+    # Il resolver originale si aspetta una lista di ID serre
     return [gh.get("greenhouse_id") for gh in data.get("items", []) if gh.get("greenhouse_id")]
 
 
 if __name__ == '__main__':
-    pprint(retrieve_greenhouses_from_mongo('alice88'))
+    pprint(retrieve_greenhouses('alice88'))

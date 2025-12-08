@@ -15,6 +15,14 @@ class CatalogGetRequest(Enum):
     GET_DEVICES = auto(),
     SERVICE_OVERVIEW = auto(),
     SERVICE_GH_DETAIL = auto(),
+    REGISTER_NEW_GREENHOUSE = auto(),
+    REGISTER_NEW_DEVICE = auto(),
+    DEVICE_CONFIG = auto(),
+    GREENHOUSE_THRESHOLDS = auto(),
+    GREENHOUSE_EFFECTS = auto(),
+    USER_INFO = auto(),
+    ACTUATOR_INFO = auto(),
+    MEASURES = auto(),
 
 
 class CatalogPostRequest(Enum):
@@ -25,6 +33,7 @@ class CatalogPostRequest(Enum):
     LOGIN = auto(),
     TOKEN_LOGIN = auto()
     SET_CROP = auto()
+    CREATE_GREENHOUSE = auto()
 
 
 class CatalogPutRequest(Enum):
@@ -33,6 +42,7 @@ class CatalogPutRequest(Enum):
     ASSOCIATE_DEVICE = auto(),
     UPDATE_DEVICE_STATUS = auto()
     UPDATE_STRATEGY = auto()
+    ACTUATOR_BIND = auto()
 
 
 class CatalogDeleteRequest(Enum):
@@ -62,6 +72,22 @@ class CatalogGetDispatcher:
             return CatalogGetRequest.SERVICE_OVERVIEW
         if len(path) == 2 and path[0] == 'services' and path[1] == 'gh':
             return CatalogGetRequest.SERVICE_GH_DETAIL
+        if CatalogGetDispatcher._is_register_new_greenhouse_request(path, query):
+            return CatalogGetRequest.REGISTER_NEW_GREENHOUSE
+        if CatalogGetDispatcher._is_register_new_device_request(path, query):
+            return CatalogGetRequest.REGISTER_NEW_DEVICE
+        if CatalogGetDispatcher._is_device_config_request(path, query):
+            return CatalogGetRequest.DEVICE_CONFIG
+        if CatalogGetDispatcher._is_greenhouse_thresholds_request(path, query):
+            return CatalogGetRequest.GREENHOUSE_THRESHOLDS
+        if CatalogGetDispatcher._is_greenhouse_effects_request(path, query):
+            return CatalogGetRequest.GREENHOUSE_EFFECTS
+        if CatalogGetDispatcher._is_user_info_request(path):
+            return CatalogGetRequest.USER_INFO
+        if CatalogGetDispatcher._is_actuator_info_request(path, query):
+            return CatalogGetRequest.ACTUATOR_INFO
+        if CatalogGetDispatcher._is_measures_request(path, query):
+            return CatalogGetRequest.MEASURES
         return CatalogGetRequest.NOT_FOUND
 
     @staticmethod
@@ -70,12 +96,14 @@ class CatalogGetDispatcher:
         return len(path) == 1 and path[0] == 'devices' and {'greenhouse_id'}.issubset(query)
 
     @staticmethod
-    #def _is_get_crops_request(path, query):
-    #    """
-    #    path: crops
-    #    query: (opzionale) token per UI autenticata
-    #    """
-    #    return len(path) == 1 and path[0] == 'crops'
+    def _is_get_crops_request(path, query):
+        """
+        path: crops
+        query: (optional) token for authenticated UI
+        """
+        return len(path) == 1 and path[0] == 'crops'
+
+    @staticmethod
     def _is_set_crop_request(path, query):
         if len(path) != 2 or path[0] != 'greenhouse' or path[1] != 'crop':
           return False
@@ -181,6 +209,75 @@ class CatalogGetDispatcher:
             return False
         return True
 
+    @staticmethod
+    def _is_register_new_greenhouse_request(path, query):
+        """
+        Admin endpoint to register a greenhouse id before shipping
+        """
+        if len(path) != 2:
+            return False
+        if path[0] != 'register' or path[1] != 'greenhouse':
+            return False
+        return 'greenhouse_id' in query
+
+    @staticmethod
+    def _is_register_new_device_request(path, query):
+        """
+        Admin endpoint to register a device id before shipping
+        """
+        if len(path) != 2:
+            return False
+        if path[0] != 'register' or path[1] != 'device':
+            return False
+        return {'device_id', 'device_type'}.issubset(query)
+
+    @staticmethod
+    def _is_device_config_request(path, query):
+        if len(path) != 3:
+            return False
+        if path[0] != 'devices' or path[2] != 'config':
+            return False
+        query.setdefault('device_id', path[1])
+        return True
+
+    @staticmethod
+    def _is_greenhouse_thresholds_request(path, query):
+        if len(path) != 3:
+            return False
+        if path[0] != 'greenhouses' or path[2] != 'thresholds':
+            return False
+        query.setdefault('greenhouse_id', path[1])
+        return True
+
+    @staticmethod
+    def _is_greenhouse_effects_request(path, query):
+        if len(path) != 3:
+            return False
+        if path[0] != 'greenhouses' or path[2] != 'effects':
+            return False
+        query.setdefault('greenhouse_id', path[1])
+        return True
+
+    @staticmethod
+    def _is_user_info_request(path):
+        return len(path) == 1 and path[0] == 'user'
+
+    @staticmethod
+    def _is_actuator_info_request(path, query):
+        if len(path) != 3:
+            return False
+        if path[0] != 'devices' or path[2] != 'actuator-info':
+            return False
+        query.setdefault('device_id', path[1])
+        return True
+
+    @staticmethod
+    def _is_measures_request(path, query):
+        if len(path) != 1 or path[0] != 'measures':
+            return False
+        required = {'device_id', 'metric', 'range'}
+        return required.issubset(query.keys())
+
 
 class CatalogPostDispatcher:
     @staticmethod
@@ -195,6 +292,8 @@ class CatalogPostDispatcher:
             return CatalogPostRequest.LOGIN
         if CatalogPostDispatcher._is_set_crop_request(path, query):    # <-- NEW
             return CatalogPostRequest.SET_CROP
+        if CatalogPostDispatcher._is_create_greenhouse_request(path, query):
+            return CatalogPostRequest.CREATE_GREENHOUSE
         return CatalogPostRequest.NOT_FOUND
 
 
@@ -279,6 +378,16 @@ class CatalogPostDispatcher:
             return False
         return True
 
+    @staticmethod
+    def _is_create_greenhouse_request(path, query):
+        """
+        User endpoint to create a greenhouse with a name.
+        path: greenhouses
+        query/body: name
+        auth: token
+        """
+        return len(path) == 1 and path[0] == 'greenhouses'
+
 
 class CatalogPutDispatcher:
     @staticmethod
@@ -291,6 +400,8 @@ class CatalogPutDispatcher:
             return CatalogPutRequest.UPDATE_DEVICE_STATUS
         if CatalogPutDispatcher._is_update_strategy_request(path, query):  # <-- NEW
             return CatalogPutRequest.UPDATE_STRATEGY
+        if CatalogPutDispatcher._is_actuator_bind_request(path, query):
+            return CatalogPutRequest.ACTUATOR_BIND
         return CatalogPutRequest.NOT_FOUND
 
     @staticmethod
@@ -357,6 +468,19 @@ class CatalogPutDispatcher:
         if not {'device_id', 'greenhouse_id', 'device_name'}.issubset(query):
             return False
         return True
+
+    @staticmethod
+    def _is_actuator_bind_request(path, query):
+        """
+        path: actuators/{id}/bind
+        query: raspberry_id
+        """
+        if len(path) != 3:
+            return False
+        if path[0] != 'actuators' or path[2] != 'bind':
+            return False
+        query.setdefault('actuator_id', path[1])
+        return 'raspberry_id' in query
 
 
 class CatalogDeleteDispatcher:

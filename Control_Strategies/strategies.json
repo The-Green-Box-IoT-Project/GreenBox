@@ -1,1 +1,36 @@
-{}
+{
+  "b235c9e9-2051-4706-b0de-f964926d1bbc": {
+    "crop": "tomato",
+    "profile_version": 1,
+    "targets": {
+      "temperature": {
+        "lower": 20.0,
+        "upper": 26.0,
+        "deadband": 0.5,
+        "min": 21,
+        "max": 27
+      },
+      "humidity": {
+        "lower": 60.0,
+        "upper": 80.0,
+        "deadband": 2.0
+      },
+      "light": {
+        "lower": 5000,
+        "upper": 15000,
+        "deadband": 50
+      },
+      "soil_humidity": {
+        "lower": 70.0,
+        "upper": 90.0,
+        "deadband": 2.0
+      },
+      "pH": {
+        "lower": 5.8,
+        "upper": 6.5,
+        "deadband": 0.2
+      }
+    },
+    "controls": {}
+  }
+}

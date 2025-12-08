@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import cherrypy
@@ -22,6 +23,8 @@ def retrieve_endpoint():
         data = json.load(f)
         catalog_ip = data['catalog_ip']
         catalog_port = data['catalog_port']
+    catalog_ip = os.getenv('CATALOG_HOST', catalog_ip)
+    catalog_port = int(os.getenv('CATALOG_PORT', catalog_port))
     return catalog_ip, catalog_port
 
 
