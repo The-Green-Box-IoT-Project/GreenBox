@@ -19,6 +19,14 @@ app = FastAPI(title="GreenBox Mongo Adapter")
 def health():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
+@app.get("/verify-device")
+def verify_device(device_id: str = Query(...)):
+    """
+    Verifica se un device esiste nel catalogo.
+    """
+    exists = mongo.verify_device_existence(device_id)
+    return {"exists": exists}
+
 @app.get("/greenhouses")
 def list_greenhouses(username: str = Query(None)):
     """

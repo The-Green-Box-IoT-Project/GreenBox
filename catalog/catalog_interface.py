@@ -2,7 +2,7 @@ import json
 from os import path
 from pathlib import Path
 from pprint import pprint
-from Adapters.mongo.Mongo_DB_adapter import MongoAdapter
+# from Adapters.mongo.Mongo_DB_adapter import MongoAdapter
 import os
 import requests
 
@@ -14,14 +14,14 @@ USERS_FILE = P / 'users.json'
 SERVICES_FILE = P / 'services.json'
 GREENHOUSES_FILE = P / 'generator' / 'greenhouses.json'
 DEVICES_FILE = P / 'generator' / 'devices.json'
-DEVICES_LEGEND_FILE = P / 'devices_legend.json'
+# DEVICES_LEGEND_FILE = P / 'devices_legend.json'
 ROOT_DIR = P.parent
 STRATEGIES_FILE = ROOT_DIR / 'Control_Strategies' / 'strategies.json'
 CROP_PROFILES_FILE = ROOT_DIR / 'Control_Strategies' / 'crop_profiles.json'
 MONGO_ADAPTER_URL = os.getenv("MONGO_ADAPTER_URL", "http://127.0.0.1:8082")
 MONGO_URI = os.getenv("CATALOG_MONGO_URI", os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
 MONGO_DB = os.getenv("CATALOG_MONGO_DB", os.getenv("MONGO_DB", "greenbox"))
-mongo_adapter = MongoAdapter(MONGO_URI, MONGO_DB)
+# mongo_adapter = MongoAdapter(MONGO_URI, MONGO_DB)
 
 
 def _load_json_catalog(catalog_path: Path) -> dict:
@@ -106,11 +106,12 @@ def retrieve_username_by_token(token_http):
 
 # Existence
 def verify_device_existence(device_id: str) -> bool:
-    device = mongo_adapter.retrieve_device(device_id)
-    if device:
-        return True
-    devices = _load_json_catalog(DEVICES_FILE)
-    return device_id in devices
+    # device = mongo_adapter.retrieve_device(device_id)
+    device = requests.get(f"{MONGO_ADAPTER_URL}/verify-device",
+                          params={
+                              "device_id": device_id
+                          }).json().get("exists")
+    return device
 
 
 def verify_greenhouse_existence(greenhouse_id: str) -> bool:
@@ -131,6 +132,23 @@ def retrieve_greenhouse_ownership(greenhouse_id):
         return greenhouse.get('tenant_id')
     greenhouses = _load_json_catalog(GREENHOUSES_FILE)
     return (greenhouses.get(greenhouse_id, {}) or {}).get('owner')
+
+"""
+ESEMPIO
+"""
+def get_measurements(measurement_type, start_time, end_time, zone_id):
+    url = f"http://influxdb_adapter_url/measurements"
+    params = {
+        "measurement_type": measurement_type,
+        "start_time": start_time,
+        "end_time": end_time,
+        "zone_id": zone_id
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": "Failed to retrieve measurements", "status_code": response.status_code}
 
 
 def retrieve_device_ownership(device_id):

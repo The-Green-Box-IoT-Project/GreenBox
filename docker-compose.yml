@@ -13,10 +13,10 @@ services:
       MONGO_INITDB_DATABASE: greenbox
     volumes:
       - mongo-data:/data/db
-      - ./Adapters/mongo/init:/docker-entrypoint-initdb.d:ro
+      - ./catalog/mongo/init:/docker-entrypoint-initdb.d:ro
 
   mongo-adapter:
-    build: ./Adapters/mongo
+    build: ./catalog/mongo
     container_name: greenbox-mongo-adapter
     restart: unless-stopped
     environment:
