@@ -2,27 +2,30 @@ import logging
 import time
 from dotenv import load_dotenv
 from greenbox.utils.logging import setup_logger
-from greenbox.statistics.statistics import StatisticsHub
+from greenbox.statistics.statistics import StateAggregator
 
 
 def main():
-    """Start the statistics (StatisticsHub) and keep it alive."""
+    """Start the statistics service (StateAggregator) and keep it alive."""
     load_dotenv()
 
-    hub = StatisticsHub(sim=True)  # if simulation is on else False
-    setup_logger(f"stats_{hub.workers[0].raspberry_id}")
+    # Create and start the new aggregator
+    aggregator = StateAggregator()
+    setup_logger("statistics_aggregator")
 
     try:
-        hub.start()
+        aggregator.start()
+        # The main thread waits here, while the aggregator runs in a background thread.
+        # This allows a graceful shutdown on KeyboardInterrupt (Ctrl+C).
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logging.info("Interrupted, shutting down statistics...")
+        logging.info("Interrupted, shutting down statistics aggregator...")
     finally:
         try:
-            hub.stop()
+            aggregator.stop()
         except Exception:
-            pass
+            logging.exception("Error during aggregator shutdown.")
 
 
 if __name__ == "__main__":

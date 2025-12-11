@@ -1,32 +1,54 @@
+import os
+from dotenv import load_dotenv
 import json
-from datetime import datetime
 import threading
 import logging
 
 from greenbox.utils.mqtt import MyMQTT
 from greenbox.sim.mockseries.mockseries import SimulateRealTimeReading
 
+load_dotenv()
+
 
 class Sensor:
-    def __init__(self, config_dict, broker_ip, broker_port, base_topic, time_interval):
+    def __init__(self, config_dict, broker_ip, broker_port, base_topic):
 
         # Load sensor attribute
-        self.device_id = config_dict['id']
-        self.device_name = config_dict['name']
-        self.device_type = config_dict['type']
-        self.measurements = [m['type'] for m in config_dict['measurements']]
-        self.time_interval = time_interval
+        self.device_id = config_dict["id"]
+        self.measurements = config_dict["measurements"]  # List of measurement keys
+        self.units = config_dict[
+            "units"
+        ]  # Dict of measurement units (key is measurement)
+        self.time_interval = float(os.getenv("TIME_INTERVAL_SENSORS"))
+        # self.time_interval = os.getenv("TIME_INTERVAL_SENSORS")
 
-        self.mqtt = MyMQTT(clientID=self.device_id,
-                           broker=broker_ip,
-                           port=broker_port,
-                           notifier=None)
+        self.mqtt = MyMQTT(
+            clientID=self.device_id, broker=broker_ip, port=broker_port, notifier=None
+        )
         self.base_topic = base_topic
+        topic_parts = base_topic.strip("/").split("/")
+        self.site_id = topic_parts[0] if len(topic_parts) > 0 else None
+        self.raspberry_id = topic_parts[1] if len(topic_parts) > 1 else None
 
         self._stop_event = threading.Event()
 
     def _build_publisher_topic(self, measurement_key):
-        return self.base_topic + self.device_id + '/' + measurement_key
+        return self.base_topic + self.device_id + "/" + measurement_key
+
+    def _build_payload(self, metric, raw_value):
+        try:
+            value = round(float(raw_value), 3)
+        except (TypeError, ValueError):
+            return None
+
+        return {
+            "value": value,
+            "unit": self.units.get(metric),
+            "sensor": self.device_id,
+            "metric": metric,
+            "site": self.site_id,
+            "device": self.raspberry_id,
+        }
 
     def hardware_read(self):
         raise NotImplementedError
@@ -47,20 +69,21 @@ class Sensor:
         If value is a dict, look up each measurement by its 'field' key.
         If value is scalar, replicate to all measurements.
         """
-        ts = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
-
         if isinstance(value, dict):
             for m in self.measurements:
                 field = m.get("field") if isinstance(m, dict) else str(m)
                 if field in value:
                     topic = self._build_publisher_topic(field)
-                    payload = {"timestamp": ts, "value": round(float(value[field]), 3)}
-                    self.mqtt.MyPublish(topic, payload)
+                    payload = self._build_payload(field, value[field])
+                    if payload is not None:
+                        self.mqtt.MyPublish(topic, payload)
         else:
             for m in self.measurements:
-                topic = self._build_publisher_topic(m)
-                payload = {"timestamp": ts, "value": round(float(value), 3)}
-                self.mqtt.MyPublish(topic, payload)
+                field = m.get("field") if isinstance(m, dict) else str(m)
+                topic = self._build_publisher_topic(field)
+                payload = self._build_payload(field, value)
+                if payload is not None:
+                    self.mqtt.MyPublish(topic, payload)
 
     def request_stop(self):
         """Signal the reading loop to stop gracefully."""
@@ -93,20 +116,22 @@ class SensorSim(Sensor):
     before publishing the read value.
     """
 
-    def __init__(self, config_dict, broker_ip, broker_port, base_topic, time_interval):
-        super().__init__(config_dict, broker_ip, broker_port, base_topic, time_interval)
+    def __init__(self, config_dict, broker_ip, broker_port, base_topic):
+        super().__init__(config_dict, broker_ip, broker_port, base_topic)
         # Replace MQTT client with one that calls back here
-        self.mqtt = MyMQTT(clientID=self.device_id,
-                           broker=broker_ip,
-                           port=broker_port,
-                           notifier=self)
+        self.mqtt = MyMQTT(
+            clientID=self.device_id, broker=broker_ip, port=broker_port, notifier=self
+        )
 
         # Latest deltas per actuator, e.g. {"fan_001": {"temperature": -0.12, "humidity": -0.4}, ...}
         self._actuator_deltas = {}
         self._lock = threading.Lock()
 
-        # Subscribe to all actuators' data
-        self._actuator_topic = self.base_topic.replace('/sensors/', '/actuators/') + '+/+/data'
+        # Subscribe to all actuators' data for THIS specific zone (greenhouse/raspberry)
+        self._actuator_topic = f"/{self.site_id}/{self.raspberry_id}/actuators/+/+/data"
+        # self._actuator_topic = (
+        #     self.base_topic.replace(f"/+/sensors/", "/actuators/") + "+/+/data"
+        # )
 
     def notify(self, topic, payload):
         """
@@ -122,14 +147,16 @@ class SensorSim(Sensor):
         }
         """
         try:
-            data = json.loads(payload.decode() if isinstance(payload, (bytes, bytearray)) else payload)
+            data = json.loads(
+                payload.decode() if isinstance(payload, (bytes, bytearray)) else payload
+            )
         except Exception:
             return
 
             # Extract actuator_id from topic
-        parts = topic.strip('/').split('/')
+        parts = topic.strip("/").split("/")
         try:
-            i = parts.index('actuators')
+            i = parts.index("actuators")
             actuator_id = parts[i + 2]  # <system>=i+1, <id>=i+2
         except Exception:
             return
@@ -137,8 +164,8 @@ class SensorSim(Sensor):
         with self._lock:
             slot = self._actuator_deltas.setdefault(actuator_id, {})
             for k, v in data.items():
-                if isinstance(k, str) and k.startswith('delta_'):
-                    field = k[len('delta_'):]
+                if isinstance(k, str) and k.startswith("delta_"):
+                    field = k[len("delta_") :]
                     try:
                         slot[field] = float(v)  # overwrite: keep *latest* per actuator
                     except (TypeError, ValueError):
@@ -193,14 +220,15 @@ class SensorSim(Sensor):
                             "new": round(new_val, 4),
                             "delta_sum": round(delta_sum, 4),
                             "contributors": len(set(contrib_ids.get(field, []))),
-                            "actuators": sorted(set(contrib_ids.get(field, [])))
+                            "actuators": sorted(set(contrib_ids.get(field, []))),
                         }
                     except (TypeError, ValueError):
                         pass
             if applied:
                 logging.info(
                     "[%s] Applied latest-per-actuator deltas: %s",
-                    self.device_id, applied
+                    self.device_id,
+                    applied,
                 )
             return out
 
@@ -217,8 +245,13 @@ class SensorSim(Sensor):
                     logging.info(
                         "[%s] Applied latest-per-actuator delta on %s: base=%.4f, new=%.4f, "
                         "delta_sum=%.4f, contributors=%d, actuators=%s",
-                        self.device_id, field, base, new_val, float(delta_sum),
-                        len(ids), ids
+                        self.device_id,
+                        field,
+                        base,
+                        new_val,
+                        float(delta_sum),
+                        len(ids),
+                        ids,
                     )
                     return new_val
                 except (TypeError, ValueError):
@@ -239,8 +272,6 @@ class SensorSim(Sensor):
             m = self.measurements[0]
             return SimulateRealTimeReading(m).read()
 
-        sensors = [m for m in self.measurements if m != 'light_natural']
+        sensors = [m for m in self.measurements if m != "light_natural"]
         readings = {m: SimulateRealTimeReading(m).read() for m in sensors}
-        if 'light' in self.measurements:
-            readings['light_natural'] = readings['light']
         return readings

@@ -15,9 +15,7 @@ class MyMQTT:
         self._connected_once = False
 
         self._c = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION1,
-            client_id=clientID,
-            clean_session=True
+            mqtt.CallbackAPIVersion.VERSION1, client_id=clientID, clean_session=True
         )
         self._c.on_connect = self._on_connect
         self._c.on_message = self._on_message
@@ -31,7 +29,13 @@ class MyMQTT:
     # --- callbacks ---
 
     def _on_connect(self, client, userdata, flags, rc):
-        logging.info("[%s] Connected to %s:%s (rc=%s)", self._clientID, self.broker, self.port, rc)
+        logging.info(
+            "[%s] Connected to %s:%s (rc=%s)",
+            self._clientID,
+            self.broker,
+            self.port,
+            rc,
+        )
         if rc == 0 and self._connected_once and self._topic:
             self._c.subscribe(self._topic, qos=2)
             logging.info("[%s] Resubscribed to %s", self._clientID, self._topic)
@@ -52,7 +56,9 @@ class MyMQTT:
     # --- api ---
 
     def start(self):
-        logging.info("[%s] Connecting to %s:%s ...", self._clientID, self.broker, self.port)
+        logging.info(
+            "[%s] Connecting to %s:%s ...", self._clientID, self.broker, self.port
+        )
         self._c.connect(self.broker, self.port, keepalive=60)
         self._c.loop_start()
 
@@ -67,12 +73,14 @@ class MyMQTT:
         except Exception:
             logging.exception("[%s] json.dumps failed", self._clientID)
             return None
-        info = self._c.publish(topic, payload, qos=2, retain=False)
+        info = self._c.publish(topic, payload, qos=2, retain=False) # Hardcoded to False
         rc = getattr(info, "rc", 0)
         if rc == 0:
             logging.info("[%s] Published to %s: %s", self._clientID, topic, payload)
         else:
-            logging.warning("[%s] Publish failed to %s (rc=%s)", self._clientID, topic, rc)
+            logging.warning(
+                "[%s] Publish failed to %s (rc=%s)", self._clientID, topic, rc
+            )
         return info
 
     def MyUnsubscribe(self):

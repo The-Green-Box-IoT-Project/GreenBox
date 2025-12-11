@@ -1,0 +1,52 @@
+{
+  "raspberries": [
+    {
+      "id": "rb_001",
+      "name": "Raspberry Pi - Zona 1",
+      "sensors": [
+        {
+          "id": "tthh_001",
+          "pin": 1,
+          "measurements": ["temperature", "humidity"],
+          "units": { "temperature": "°C", "humidity": "%" }
+        },
+        {
+          "id": "llll_001",
+          "pin": 2,
+          "measurements": ["light"],
+          "units": { "light": "lumen" }
+        },
+        {
+          "id": "phph_001",
+          "pin": 3,
+          "measurements": ["pH"],
+          "units": { "pH": "pH" }
+        },
+        {
+          "id": "shsh_001",
+          "pin": 4,
+          "measurements": ["soil_humidity"],
+          "units": { "soil_humidity": "%" }
+        }
+      ]
+    },
+    {
+      "id": "rb_002",
+      "name": "Raspberry Pi - Zona 2",
+      "sensors": [
+        {
+          "id": "tthh_002",
+          "pin": 1,
+          "measurements": ["temperature", "humidity"],
+          "units": { "temperature": "°C", "humidity": "%" }
+        },
+        {
+          "id": "llll_002",
+          "pin": 2,
+          "measurements": ["light"],
+          "units": { "light": "lumen" }
+        }
+      ]
+    }
+  ]
+}

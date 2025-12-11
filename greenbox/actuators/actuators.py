@@ -2,58 +2,44 @@ import json
 import time
 import logging
 import threading
-from typing import Dict
+from typing import Dict, List
+from pathlib import Path
 from pprint import pformat
 from datetime import datetime, timezone
 
-from greenbox.utils.catalog_client import log_to_catalog
+import pandas as pd
 from greenbox.utils.mqtt import MyMQTT
-from greenbox.sim.effects.effects import Effects
-
-
-class ActuatorConnector:
-    def __init__(self):
-        # GET from catalog
-        cfg = log_to_catalog()
-        self.greenhouse_id = cfg["greenhouse_id"]  # e.g. 'gh-01'
-        raspberry_id = cfg["raspberry_id"]  # e.g. 'rb-01'
-        broker_ip = cfg["broker_ip"]  # '127.0.0.1'
-        broker_port = cfg["broker_port"]  # 1883
-        associated_actuators = cfg["actuators"]
-        topic = f"{self.greenhouse_id}/{raspberry_id}/actuators"
-
-        self.actuators = [Actuator(a, broker_ip, broker_port, topic) for a in associated_actuators]
-
-    def start(self):
-        """Start all actuators."""
-        for a in self.actuators:
-            a.start()
-
-    def stop(self):
-        """Stop all actuators gracefully."""
-        for a in self.actuators:
-            a.turn_off()
-            a.stop()
-
+from greenbox.utils import catalog_client
 
 class Actuator:
-    """Generic actuator class handling MQTT communication and periodic publishing."""
+    """
+    Represents a single, independent actuator instance.
+    It connects to MQTT, listens for commands on its specific topic,
+    and publishes its simulated state. It uses the global logger,
+    which is configured by the script that launches it.
+    """
 
-    def __init__(self, config_dict, broker_ip, broker_port, base_topic):
-        self.device_id = config_dict['id']
-        self.device_name = config_dict['name']
-        self.system = config_dict['type']
+    def __init__(self, device_id: str, system: str, gh_id: str, rb_id: str, broker_ip: str, broker_port: int):
+        self.device_id = device_id
+        self.system = system
+        self.gh_id = gh_id
+        self.rb_id = rb_id
 
-        # Load effects
-        effects = Effects()
-        effects.get_system(self.system)
-        self.levels = effects.levels
-        self.by_level = effects.by_level
+        # Load the simulation model (effects) for this actuator's system type
+        effects_df = catalog_client.get_effects_config(gh_id)
+        actuator_effects_df = effects_df[effects_df["system"] == self.system].copy()
+        if actuator_effects_df.empty:
+            logging.warning("[%s] No effects configuration found for system '%s'. This actuator will have no simulated effect.", self.device_id, self.system)
+        
+        self.levels = sorted(actuator_effects_df["level"].astype(str).tolist())
+        self.by_level: Dict[str, Dict[str, float]] = {
+            str(r["level"]): r.drop(labels=["system", "level"]).dropna().to_dict()
+            for _, r in actuator_effects_df.iterrows()
+        }
 
-        # Prepare topics
-        self.base_topic = base_topic.strip("/")
-        self.CMD_TOPIC = self.build_cmd_topic(self.system, self.device_id)
-        self.DATA_TOPIC = self.build_data_topic(self.system, self.device_id)
+        # Build zone-specific topics
+        self.CMD_TOPIC = f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/cmd"
+        self.DATA_TOPIC = f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/{self.device_id}/data"
 
         # MQTT wrapper
         self.mqtt = MyMQTT(
@@ -72,31 +58,23 @@ class Actuator:
         self._pub_thread = None
         self._lock = threading.Lock()
 
-    def apply(self, level: int, dt: float) -> Dict[str, float]:
-        """Return actuator effects for 'level' and duration dt (s)."""
+    def apply(self, level: int, elapsed_time: float) -> Dict[str, float]: # Modified signature
+        """Calculates the simulated cumulative effect of the actuator since it was turned on."""
         key = f"{level}%"
-        eff = self.by_level[key]
+        eff = self.by_level.get(key, self.by_level.get(str(level), {}))
         out = {}
         for k, v in eff.items():
             if k in ("energy_consumption", "water_consumption"):
                 out[k] = v
             elif k == "light":
-                out[f"delta_{k}"] = v
+                # For light, the effect is a constant output, not cumulative over time.
+                out[f"delta_{k}"] = v # Not multiplied by elapsed_time
             else:
-                out[f"delta_{k}"] = v * dt
+                out[f"delta_{k}"] = v * elapsed_time # Multiplied by elapsed_time
         return out
 
     def set_level(self, level: int):
-        """Set the actuator level."""
         self.level = level
-
-    def build_cmd_topic(self, system, device_id) -> str:
-        """Build MQTT command topic for this actuator."""
-        return f"/{self.base_topic}/{system}/{device_id}/cmd"
-
-    def build_data_topic(self, system, device_id) -> str:
-        """Build MQTT data topic for this actuator."""
-        return f"/{self.base_topic}/{system}/{device_id}/data"
 
     def start(self):
         """Start MQTT client and subscribe to command topic."""
@@ -105,12 +83,16 @@ class Actuator:
         logging.info(f"[{self.device_id}] Listening on {self.CMD_TOPIC}")
 
     def stop(self):
-        """Turn off and disconnect MQTT."""
+        """Gracefully stop the actuator."""
+        logging.info(f"[{self.device_id}] Stop request received.")
+        self.turn_off()
         try:
             self.mqtt.MyUnsubscribe(self.CMD_TOPIC)
         except Exception:
             pass
         self.mqtt.stop()
+        logging.info(f"[{self.device_id}] Stopped.")
+
 
     def notify(self, topic, payload):
         """Handle received MQTT command messages."""
@@ -122,7 +104,7 @@ class Actuator:
             )
             obj = json.loads(payload_str)
             if not isinstance(obj, dict) or "cmd" not in obj:
-                logging.info(f"[{self.device_id}] Invalid format: {payload_str!r}")
+                logging.warning(f"[{self.device_id}] Invalid format: {payload_str!r}")
                 return
 
             cmd = str(obj["cmd"]).upper()
@@ -133,18 +115,18 @@ class Actuator:
                     try:
                         level = int(float(level))
                     except (TypeError, ValueError):
-                        logging.info(f"[{self.device_id}] Invalid 'level': {level!r}")
+                        logging.warning(f"[{self.device_id}] Invalid 'level': {level!r}")
                         return
                 self._turn_on(level)
             elif cmd == "OFF":
                 self.turn_off()
             else:
-                logging.info(f"[{self.device_id}] Unsupported 'cmd': {cmd!r}")
+                logging.warning(f"[{self.device_id}] Unsupported 'cmd': {cmd!r}")
 
         except json.JSONDecodeError:
-            logging.info(f"[{self.device_id}] Invalid JSON payload: {payload!r}")
+            logging.warning(f"[{self.device_id}] Invalid JSON payload: {payload!r}")
         except Exception as e:
-            logging.info(f"[{self.device_id}] Error in notify: {e}")
+            logging.error(f"[{self.device_id}] Error in notify: {e}", exc_info=True)
 
     def _turn_on(self, level: int = None):
         """Turn on actuator and start publisher thread."""
@@ -156,9 +138,7 @@ class Actuator:
                     self._on_epoch = time.time()
                     logging.info(f"[{self.device_id}] Level changed to {self.level}%.")
                     return
-
             if self._is_on:
-                logging.info(f"[{self.device_id}] Already ON.")
                 return
 
             self._is_on = True
@@ -188,16 +168,16 @@ class Actuator:
 
     def _publisher_loop(self):
         """Periodic data publishing loop."""
-        next_ts = time.time()
-        last_ts = next_ts
+        # next_ts = time.time() # No longer needed for elapsed calculation
+        # last_ts = next_ts # No longer needed for elapsed calculation
         while not self._stop_event.is_set():
             now = time.time()
-            dt = now - last_ts
-            last_ts = now
+            # dt = now - last_ts # No longer needed
+            # last_ts = now # No longer needed
             with self._lock:
                 elapsed = int(now - self._on_epoch) if self._on_epoch else 0
                 lvl = self.level
-            effects = self.apply(lvl, dt)
+            effects = self.apply(lvl, float(elapsed)) # Pass elapsed as float
             ts_iso = datetime.now(timezone.utc).isoformat()
             payload = {
                 "id": self.device_id,
@@ -206,14 +186,16 @@ class Actuator:
                 "system": self.system,
                 "level": lvl,
             } | effects
+            # Ensure water_consumption is always present, defaulting to 0.0 if not provided by effects
+            payload.setdefault("water_consumption", 0.0)
             try:
                 self.mqtt.MyPublish(self.DATA_TOPIC, payload)
             except Exception as e:
-                logging.info(f"[{self.device_id}] Publish error: {e}")
+                logging.warning(f"[{self.device_id}] Publish error: {e}")
 
-            next_ts += self.publish_period_s
-            delay = max(0.0, next_ts - time.time())
-            if self._stop_event.wait(timeout=delay):
+            # next_ts += self.publish_period_s # No longer needed if using sleep
+            # delay = max(0.0, next_ts - time.time()) # No longer needed
+            if self._stop_event.wait(timeout=self.publish_period_s): # Simplified sleep
                 break
 
     def __str__(self):

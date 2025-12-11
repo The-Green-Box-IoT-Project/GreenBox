@@ -1,16 +1,15 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Dict
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-from greenbox.utils.tools import Today, get_latest_entry_before_now
 
 load_dotenv()
 
-P = Path(__file__).resolve().parent  # cartella del modulo
+P = Path(__file__).resolve().parent
 
 
 def datetime_range(granularity: timedelta, start_time, end_time) -> pd.DatetimeIndex:
@@ -29,7 +28,10 @@ def datetime_range(granularity: timedelta, start_time, end_time) -> pd.DatetimeI
 
 class LinearTrend:
     """Linear baseline: flat_base + coefficient * (elapsed / time_unit)."""
-    def __init__(self, coefficient: float, time_unit: timedelta, flat_base: float = 0.0):
+
+    def __init__(
+        self, coefficient: float, time_unit: timedelta, flat_base: float = 0.0
+    ):
         self.coefficient = float(coefficient)
         self.time_unit = time_unit
         self.flat_base = float(flat_base)
@@ -43,12 +45,16 @@ class LinearTrend:
 
 class _PeriodicSeasonality:
     """Cyclic, piecewise-linear interpolation over a fixed period (seconds)."""
+
     def __init__(self, knots: Dict[timedelta, float], seconds_period: int):
         if not knots:
             self.knots_s = np.array([0.0], dtype=float)
             self.knots_v = np.array([0.0], dtype=float)
         else:
-            items = sorted(((td.total_seconds(), float(val)) for td, val in knots.items()), key=lambda p: p[0])
+            items = sorted(
+                ((td.total_seconds(), float(val)) for td, val in knots.items()),
+                key=lambda p: p[0],
+            )
             self.knots_s = np.array([a for a, _ in items], dtype=float)
             self.knots_v = np.array([b for _, b in items], dtype=float)
         self.period = float(seconds_period)
@@ -67,6 +73,7 @@ class _PeriodicSeasonality:
 
 class DailySeasonality(_PeriodicSeasonality):
     """Daily cycle from hour-offset knots within 24h."""
+
     def __init__(self, knots: Dict[timedelta, float]):
         super().__init__(knots, 24 * 3600)
 
@@ -77,21 +84,33 @@ class DailySeasonality(_PeriodicSeasonality):
 
 class YearlySeasonality(_PeriodicSeasonality):
     """Yearly cycle from day-offset knots within a 365-day year (approx)."""
+
     def __init__(self, knots: Dict[timedelta, float]):
         super().__init__(knots, 365 * 24 * 3600)
 
     def evaluate(self, index: pd.DatetimeIndex) -> pd.Series:
-        year_start = pd.to_datetime([
-            pd.Timestamp(ts).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            for ts in index
-        ])
+        year_start = pd.to_datetime(
+            [
+                pd.Timestamp(ts).replace(
+                    month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+                )
+                for ts in index
+            ]
+        )
         seconds = (index - year_start).total_seconds()
         return pd.Series(self._interp(seconds), index=index)
 
 
 class RedNoise:
     """AR(1) noise with marginal std≈std and lag-1 corr≈rho."""
-    def __init__(self, mean: float = 0.0, std: float = 1.0, correlation: float = 0.0, seed: int | None = None):
+
+    def __init__(
+        self,
+        mean: float = 0.0,
+        std: float = 1.0,
+        correlation: float = 0.0,
+        seed: int | None = None,
+    ):
         self.mean = float(mean)
         self.std = float(std)
         self.rho = float(correlation)
@@ -101,19 +120,30 @@ class RedNoise:
         n = len(index)
         if n == 0:
             return pd.Series(dtype=float, index=index)
-        eps_std = self.std * np.sqrt(max(1e-12, 1.0 - self.rho ** 2))
+        eps_std = self.std * np.sqrt(max(1e-12, 1.0 - self.rho**2))
         x = np.empty(n, dtype=float)
         x[0] = self.rng.normal(self.mean, self.std)
         for t in range(1, n):
-            x[t] = self.mean + self.rho * (x[t - 1] - self.mean) + self.rng.normal(0.0, eps_std)
+            x[t] = (
+                self.mean
+                + self.rho * (x[t - 1] - self.mean)
+                + self.rng.normal(0.0, eps_std)
+            )
         return pd.Series(x, index=index)
 
 
 class Measure:
     """Measurement configuration and generator from JSON."""
+
     SIMULATE = os.environ.get("SIMULATE", "real")
 
-    def __init__(self, base: float, daily: Dict[timedelta, float], yearly: Dict[timedelta, float], noise: dict):
+    def __init__(
+        self,
+        base: float,
+        daily: Dict[timedelta, float],
+        yearly: Dict[timedelta, float],
+        noise: dict,
+    ):
         self.base = float(base)
         self.daily_knots = daily
         self.yearly_knots = yearly
@@ -134,14 +164,28 @@ class Measure:
                 f"Available: {', '.join(sorted(all_data.keys()))}"
             )
         data = all_data[name]
-        daily = {} if not data.get("daily_seasonality") else {
-            timedelta(hours=h): v
-            for h, v in zip(data["daily_seasonality"]["times"], data["daily_seasonality"]["values"])
-        }
-        yearly = {} if not data.get("yearly_seasonality") else {
-            timedelta(days=d): v
-            for d, v in zip(data["yearly_seasonality"]["times"], data["yearly_seasonality"]["values"])
-        }
+        daily = (
+            {}
+            if not data.get("daily_seasonality")
+            else {
+                timedelta(hours=h): v
+                for h, v in zip(
+                    data["daily_seasonality"]["times"],
+                    data["daily_seasonality"]["values"],
+                )
+            }
+        )
+        yearly = (
+            {}
+            if not data.get("yearly_seasonality")
+            else {
+                timedelta(days=d): v
+                for d, v in zip(
+                    data["yearly_seasonality"]["times"],
+                    data["yearly_seasonality"]["values"],
+                )
+            }
+        )
         return cls(
             base=data["base_value"],
             daily=daily,
@@ -175,6 +219,7 @@ class Measure:
 
 class SimulateRealTimeReading:
     """Generate today's series and sample a 1s-resolution value up to now."""
+
     def __init__(self, measurement_name: str):
         self.name = measurement_name
         self.measure = Measure.from_json(measurement_name)
@@ -184,18 +229,45 @@ class SimulateRealTimeReading:
     def read(self) -> float:
         s = self.measure.generate(self.name, self.index)
         t0 = get_latest_entry_before_now(s) or self.index[0]  # fallback alle 00:00
-        window = s.loc[t0: t0 + timedelta(hours=1)].astype(float)
+        window = s.loc[t0 : t0 + timedelta(hours=1)].astype(float)
         resampled = window.resample("1s").interpolate("linear").round(2)
         ts = get_latest_entry_before_now(resampled) or resampled.index[0]
         base_value = float(resampled.loc[ts])
-        if self.name in ['humidity', 'soil_humidity']:
+        if self.name in ["humidity", "soil_humidity"]:
             out = max(0.0, min(float(base_value), 100.0))
-        elif self.name == 'light':
+        elif self.name == "light":
             out = max(float(base_value), 0.0)
-        elif self.name == 'pH':
+        elif self.name == "pH":
             out = min(max(base_value, 0.0), 14.0)
-        elif self.name == 'temperature':
+        elif self.name == "temperature":
             out = float(base_value)
         else:
             out = float(base_value)
         return out
+
+
+class Today:
+    def __init__(self):
+        self.start_day = datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        self.end_day = datetime.now().replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+        self.yesterday = (datetime.now() + timedelta(days=-1)).replace(
+            second=0, microsecond=0
+        )
+        self.now = datetime.now().replace(second=0, microsecond=0)
+
+    def last_minutes(self, minutes: int):
+        return self.now - timedelta(minutes=minutes)
+
+
+def get_latest_entry_before_now(time_series: pd.Series):
+    now = datetime.now()
+    filtered_series = time_series[time_series.index < now]
+    if not filtered_series.empty:
+        latest_entry = filtered_series.index[-1]
+        return latest_entry
+    else:
+        return None
