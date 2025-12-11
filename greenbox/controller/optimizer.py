@@ -1,8 +1,8 @@
 from itertools import product
 from typing import Dict, List, Tuple, Any, Optional
 import math
+import pandas as pd
 
-from greenbox.sim.effects.effects import Effects
 from greenbox.sim.thresholds.thresholds import Threshold
 
 
@@ -14,22 +14,38 @@ class Optimizer:
       - Among feasible combos, minimizes weighted energy/water over T.
     """
 
-    def __init__(self, *, weights: Dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        thresholds_config: Dict[str, Threshold],
+        effects_config_df: pd.DataFrame,
+        *,
+        weights: Dict[str, float] | None = None,
+    ) -> None:
 
-        self.thresholds = Threshold.read_csv()
-        self.metrics: List[str] = [m for m in self.thresholds if m.lower() not in ("ph", "light")]
+        self.thresholds = thresholds_config
+        self.metrics: List[str] = [
+            m for m in self.thresholds if m.lower() not in ("ph", "light")
+        ]
 
-        effects = Effects()
-        systems = [s for s in effects.systems if not s.lower().startswith("light")]
-        self.actuators: Dict[str, Effects] = {}
+        # Process effects_config_df to build internal actuator models
+        self.actuators: Dict[str, Dict[str, Dict[str, float]]] = {}
+        self.levels_by_actuator: Dict[str, List[int]] = {}
+
+        all_systems = sorted(effects_config_df["system"].dropna().unique().tolist())
+        systems = [s for s in all_systems if not s.lower().startswith("light")]
+
         for s in systems:
-            e = Effects()
-            e.get_system(s)
-            self.actuators[s] = e
+            sys_df = effects_config_df[effects_config_df["system"] == s]
+            self.levels_by_actuator[s] = sorted(
+                int(str(x).rstrip("%")) for x in sys_df["level"].unique()
+            )
 
-        self.levels_by_actuator = {
-            s: sorted(int(str(x).rstrip("%")) for x in e.levels) for s, e in self.actuators.items()
-        }
+            levels_data = {}
+            for _, r in sys_df.iterrows():
+                level_key = str(r["level"])
+                effects_data = r.drop(labels=["system", "level"]).dropna().to_dict()
+                levels_data[level_key] = {k: float(v) for k, v in effects_data.items()}
+            self.actuators[s] = levels_data
 
         w = weights or {}
         self.w_energy = float(w.get("energy", 1.0))
@@ -40,6 +56,7 @@ class Optimizer:
         per_metric_payloads: Dict[str, Dict[str, Any]],
         *,
         horizon_cap_s: Optional[float] = None,
+        current_actuator_state: Dict[str, Any] # Aggiunto current_actuator_state
     ) -> Dict[str, Any]:
         """
         Returns: {"mode","actions","duration_s","post_metrics","violation"}.
@@ -47,11 +64,13 @@ class Optimizer:
         cur = self._current_from_payloads(per_metric_payloads)
 
         # HOLD if everything is already within band
-        if all(self.thresholds[m].in_band(cur.get(m, self.thresholds[m].center)) for m in self.metrics):
+        if all(
+            self.thresholds[m].in_band(cur.get(m, self.thresholds[m].center))
+            for m in self.metrics
+        ):
             return {
                 "mode": "hold",
-                "actions": {a: self.actuators[a].level for a in self.actuators},
-                "duration_s": 0.0,
+                "actions": current_actuator_state, # In modalità hold, mantiene lo stato attuale
                 "post_metrics": dict(cur),
                 "violation": self._violation_sum(cur),
             }
@@ -62,7 +81,7 @@ class Optimizer:
 
         best = {
             "key": (1, float("inf"), float("inf"), float("inf")),
-            "actions": {a: self.actuators[a].level for a in acts},
+            "actions": {a: 0 for a in acts},  # Default to off
             "T": 0.0,
             "post": dict(cur),
         }
@@ -79,7 +98,7 @@ class Optimizer:
         return {
             "mode": "optimized",
             "actions": best["actions"],
-            "duration_s": float(best["T"]),
+            # "duration_s": float(best["T"]), # Rimosso duration_s
             "post_metrics": best["post"],
             "violation": self._violation_sum(best["post"]),
         }
@@ -95,7 +114,14 @@ class Optimizer:
         w_rate = 0.0
 
         for a, lvl in actions.items():
-            row = self.actuators[a].row_for(lvl)
+            level_key = f"{int(lvl)}%"
+            # Find the row of effects for the given actuator and level
+            row = self.actuators.get(a, {}).get(
+                level_key, self.actuators.get(a, {}).get(str(int(lvl)))
+            )
+            if not row:
+                continue
+
             for col, val in row.items():
                 if not self._finite(val):
                     continue
@@ -107,7 +133,7 @@ class Optimizer:
                 elif col in net:
                     net[col] += float(val)
 
-        T_req = 0.0           # min time to enter band for all violated metrics
+        T_req = 0.0  # min time to enter band for all violated metrics
         T_max = float("inf")  # max time before leaving band for already-in-band metrics
 
         for m in self.metrics:
@@ -118,11 +144,25 @@ class Optimizer:
 
             if x < lo:
                 if dx <= 0:
-                    return False, 0.0, dict(cur), self._violation_sum(cur), e_rate, w_rate
+                    return (
+                        False,
+                        0.0,
+                        dict(cur),
+                        self._violation_sum(cur),
+                        e_rate,
+                        w_rate,
+                    )
                 T_req = max(T_req, (lo - x) / dx)
             elif x > hi:
                 if dx >= 0:
-                    return False, 0.0, dict(cur), self._violation_sum(cur), e_rate, w_rate
+                    return (
+                        False,
+                        0.0,
+                        dict(cur),
+                        self._violation_sum(cur),
+                        e_rate,
+                        w_rate,
+                    )
                 T_req = max(T_req, (x - hi) / (-dx))
             else:
                 if dx > 0:
@@ -134,18 +174,30 @@ class Optimizer:
             return False, 0.0, dict(cur), self._violation_sum(cur), e_rate, w_rate
 
         T = max(0.0, T_req)
-        post = {m: float(cur.get(m, self.thresholds[m].center)) + net.get(m, 0.0) * T for m in self.metrics}
+        post = {
+            m: float(cur.get(m, self.thresholds[m].center)) + net.get(m, 0.0) * T
+            for m in self.metrics
+        }
         resid = self._violation_sum(post)
         return True, float(T), post, resid, e_rate, w_rate
 
-    def _score(self, feasible: bool, T: float, resid: float, e_rate: float, w_rate: float) -> Tuple:
+    def _score(
+        self, feasible: bool, T: float, resid: float, e_rate: float, w_rate: float
+    ) -> Tuple:
         if feasible:
             # Primary: minimal T; Secondary: weighted resource use over horizon
-            return 0, float(T), self.w_energy * e_rate * float(T), self.w_water * w_rate * float(T)
+            return (
+                0,
+                float(T),
+                self.w_energy * e_rate * float(T),
+                self.w_water * w_rate * float(T),
+            )
         # Infeasible combos sort after all feasible ones; smaller residual is better
         return 1, float("inf"), float(resid), 0.0
 
-    def _current_from_payloads(self, payloads: Dict[str, Dict[str, Any]]) -> Dict[str, float]:
+    def _current_from_payloads(
+        self, payloads: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, float]:
         """Pick 'median' for each metric; fallback to threshold center if missing."""
         out: Dict[str, float] = {}
         for m, p in (payloads or {}).items():
@@ -194,20 +246,32 @@ class LightOptimizer:
     - Publishes only on decision change (returns None otherwise).
     """
 
-    def __init__(self) -> None:
-        th = next(v for k, v in Threshold.read_csv().items() if k.lower() == "light")
-        self.lo, self.hi = th.band()
+    def __init__(
+        self, thresholds_config: Dict[str, Threshold], effects_config_df: pd.DataFrame
+    ) -> None:
+        light_threshold = None
+        for key, value in thresholds_config.items():
+            if key.lower() == "light":
+                light_threshold = value
+                break
+        if light_threshold is None:
+            raise ValueError("Fatal: 'light' threshold configuration not found.")
 
-        e = Effects()
-        e.get_system("illumination_system")
-        self.levels = sorted(int(s.rstrip("%")) for s in e.levels)
-        self.effect: Dict[int, float] = {
-            int(s.rstrip("%")): float(e.row_for(int(s.rstrip("%"))).get("light", 0.0))
-            for s in e.levels
-        }
+        self.lo, self.hi = light_threshold.band()
+
+        # Filter effects for illumination_system
+        sys_df = effects_config_df[effects_config_df["system"] == "illumination_system"]
+        self.levels = sorted(int(s.rstrip("%")) for s in sys_df["level"].unique())
+
+        self.effect: Dict[int, float] = {}
+        for _, r in sys_df.iterrows():
+            level_key = int(r["level"].rstrip("%"))
+            self.effect[level_key] = float(r.get("light", 0.0))
 
         self.last_cmd: Optional[str] = None
-        self.last_level: Optional[int] = None  # stores the last commanded level (0..100)
+        self.last_level: Optional[int] = (
+            None  # stores the last commanded level (0..100)
+        )
 
     def decide(self, median_lux: float) -> Optional[Dict[str, object]]:
         lo = self.lo
@@ -218,8 +282,12 @@ class LightOptimizer:
             cmd = {"cmd": "OFF", "level": 0}
         else:
             target = next(
-                (lvl for lvl in self.levels if lvl and ambient + self.effect.get(lvl, 0.0) >= lo),
-                self.levels[-1],
+                (
+                    lvl
+                    for lvl in self.levels
+                    if lvl and ambient + self.effect.get(lvl, 0.0) >= lo
+                ),
+                self.levels[-1] if self.levels else 0,  # Handle case with no levels
             )
             cmd = {"cmd": "ON", "level": int(target)}
 
@@ -232,11 +300,16 @@ class LightOptimizer:
 class PhMonitor:
     """Emit an alert when pH goes out of limits; publish only on state change."""
 
-    def __init__(self) -> None:
-        th = Threshold.read_csv().get("pH") or next(
-            v for k, v in Threshold.read_csv().items() if k.lower() == "ph"
-        )
-        self.lo, self.hi = th.lower, th.upper
+    def __init__(self, thresholds_config: Dict[str, Threshold]) -> None:
+        ph_threshold = None
+        for key, value in thresholds_config.items():
+            if key.lower() == "ph":
+                ph_threshold = value
+                break
+        if ph_threshold is None:
+            raise ValueError("Fatal: 'pH' threshold configuration not found.")
+
+        self.lo, self.hi = ph_threshold.lower, ph_threshold.upper
         self.last_state: Optional[str] = None
 
     def decide(self, median_ph: float) -> Optional[dict]:

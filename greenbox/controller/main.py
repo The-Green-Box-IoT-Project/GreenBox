@@ -10,7 +10,7 @@ def main():
     load_dotenv()
 
     ctrl = Controller()
-    setup_logger(f"ctrl_{ctrl.greenhouse_id}")
+    setup_logger("controller")
 
     try:
         ctrl.start()

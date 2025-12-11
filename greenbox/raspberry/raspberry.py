@@ -1,38 +1,45 @@
 from pprint import pformat
 from concurrent.futures import ThreadPoolExecutor
+import logging
+from typing import Dict, Any
 
 from greenbox.raspberry.sensors import Sensor, SensorSim
-from greenbox.utils.catalog_client import log_to_catalog
+from greenbox.utils.catalog_client import get_device_config
 
 
 class RaspberryHub:
     """
-    Orchestrates independent sensor workers.
-    - Each sensor owns its MQTT client and publishes on its own.
-    - Hub creates, starts, stops and supervises all sensors together.
+    Orchestrates independent sensor workers for a single Raspberry Pi zone.
+    It receives its specific configuration upon initialization.
     """
 
-    def __init__(self, is_sim: bool = True):
-
-        # Simulation?
+    def __init__(self, raspberry_id: str, local_config: Dict[str, Any], is_sim: bool = True):
+        self.raspberry_id = raspberry_id
         self.is_sim = is_sim
+        
+        # Sensor configuration is passed directly from the runner
+        associated_sensors = local_config.get("sensors", [])
 
-        # GET from catalog
-        cfg = log_to_catalog()
-        self.broker_ip = cfg["broker_ip"]
-        self.broker_port = cfg["broker_port"]
-        self.greenhouse_id = cfg["greenhouse_id"]
-        self.raspberry_id = cfg["raspberry_id"]
-        associated_sensors = cfg["sensors"]
+        # Get context (greenhouse, broker) from the central catalog
+        device_context = get_device_config(self.raspberry_id)
+        self.broker_ip = device_context["broker_ip"]
+        self.broker_port = device_context["broker_port"]
+        self.greenhouse_id = device_context["greenhouse_id"]
+        
+        logging.info(
+            "[%s] Initializing. Context from catalog: [Greenhouse: %s, Broker: %s:%s]",
+            self.raspberry_id, self.greenhouse_id, self.broker_ip, self.broker_port
+        )
 
-        self.time_interval = 5  # seconds
-        self.topic = f"""/{self.greenhouse_id}/{self.raspberry_id}/sensors/"""
+        # --- Initialize sensor workers ---
+        self.topic = f"/{self.greenhouse_id}/{self.raspberry_id}/sensors/"
 
-        # Choose real vs simulated sensors
         cls = SensorSim if is_sim else Sensor
 
-        # Build independent sensors (each one has its own MQTT client)
-        self.sensors = [cls(s, self.broker_ip, self.broker_port, self.topic, self.time_interval) for s in associated_sensors]
+        self.sensors = [
+            cls(s, self.broker_ip, self.broker_port, self.topic)
+            for s in associated_sensors
+        ]
 
         self._executor = None
         self.futures = []
@@ -41,20 +48,24 @@ class RaspberryHub:
         """Start all sensor loops in parallel threads."""
         self._executor = ThreadPoolExecutor(max_workers=len(self.sensors))
         self.futures = [self._executor.submit(s.read_value) for s in self.sensors]
+        logging.info(f"[{self.raspberry_id}] All %d sensor workers started.", len(self.sensors))
 
     def stop(self):
         """Signal graceful stop and wait for all workers to finish."""
+        logging.info(f"[{self.raspberry_id}] Stopping all sensor workers...")
         for s in self.sensors:
-            # Each sensor implements request_stop() checked inside its loop
             s.request_stop()
+        
+        # Wait for all threads to complete
         for f in self.futures:
             try:
-                f.result()
+                f.result(timeout=5) # Add a timeout to avoid blocking forever
             except Exception:
-                # Keep shutdown resilient: one failed worker must not block others
-                pass
+                logging.exception(f"[{self.raspberry_id}] Error in sensor worker during shutdown.")
+        
         if self._executor:
             self._executor.shutdown(wait=True)
+        logging.info(f"[{self.raspberry_id}] All sensor workers stopped.")
 
     def __str__(self):
         return pformat(self.__dict__, indent=1, sort_dicts=False)
