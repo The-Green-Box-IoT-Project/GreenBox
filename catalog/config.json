@@ -2,5 +2,7 @@
   "catalog_ip": "127.0.0.1",
   "catalog_port": 8080,
   "broker_ip": "127.0.0.1",
-  "broker_port": 1883
+  "broker_port": 1883,
+  "mongo_adapter_url": "http://127.0.0.1:8082",
+  "influx_adapter_url": "http://127.0.0.1:8086"
 }

@@ -9,8 +9,6 @@ from .catalog_dispatcher import CatalogGetDispatcher, CatalogPostDispatcher, Cat
     CatalogDeleteDispatcher
 from .catalog_resolver import CatalogGetResolver, CatalogPostResolver, CatalogPutResolver, CatalogDeleteResolver
 
-catalog_interface.init()
-
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
 
@@ -70,7 +68,8 @@ class Catalog:
             body = json.loads(body)
         # Dispatch
         request = CatalogPutDispatcher.dispatch(path=path,
-                                                query=query)
+                                                query=query,
+                                                body=body)
         headers = cherrypy.request.headers
         # Resolve
         response = CatalogPutResolver.resolve(request=request,

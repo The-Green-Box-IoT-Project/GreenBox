@@ -1,0 +1,133 @@
+﻿Endpoints (richiesti da app)
+
+
+Note generali:
+* TUTTE le chiamate agli endpoint, eccetto Login e Registrazione, avranno negli HEADERS il token di autenticazione.
+* Dare nome degli endpoint in inglese (ho dato nome indicativo)
+* Quando su “output” c’è “-” vuol dire che si deve solo restituire il codice HTTP, non dati
+* per chiamate con modifiche (PUT, DELETE), verificare che l’oggetto sia effettivamente posseduto dall’utente chiamante
+
+
+Login metodo: POST
+input: username, password
+output: token di autenticazione
+Registrazione metodo: POST
+input: username, password
+output: -
+note: no utenti con stesso nome
+Retrieve Info Utente metodo: GET
+input: -
+output: nome utente, [altro, da definire]
+
+
+
+
+Greenhouses
+Retrieve Greenhouses metodo: GET
+input: -
+output: lista greenhouse (greenhouse: id, nome)
+Aggiunta Greenhouse metodo: POST
+input: nome greenhouse
+output: -
+note: no nome greenhouse già usato
+Rinomina Greenhouse metodo: PUT
+input: id greenhouse, nome greenhouse
+output: -
+note: no greenhouse inesistente, no nome greenhouse già usato
+Elimina Greenhouse metodo: DELETE
+input: id greenhouse
+output: -
+note: no greenhouse inesistente
+
+
+Zone
+Retrieve Zone metodo: GET
+input: id greenhouse
+output: lista zone (zona: id, nome)
+esempio:
+[
+    {
+        “id”: “jodfg89d897gdf8g”,
+        “name”: “Zona 1”
+    },
+    {
+        “id”: “fkd0902jj3”,
+        “name”: “Zona 2”
+    },
+    …
+]
+Aggiunta (associazione) Zona metodo: PUT
+input: id greenhouse, id zona, nome zona
+output: -
+note: no greenhouse inesistente, no zona inesistente, no nome zona già usato
+Rinomina Zona metodo: PUT
+input: id zona, nome zona
+output: -
+note: no zona inesistente, no nome zona già usato
+Eliminazione (disassociazione) Zona metodo: PUT
+input: id zona
+output: -
+note: no zona inesistente
+Modifica Control Strategy metodo: PUT
+input: id zona, threshold delle varie misure (vedi esempio sotto, stesso oggetto)
+output: -
+note: no zona inesistente
+Retrieve threshold della Control Strategy metodo: GET
+input: id zona
+output: threshold delle misure controllate (temperatura, soil hum., air hum.)
+note: no zona inesistente
+esempio:
+{
+  “temperature”: 10,
+  “soilHumidity”: 0.2,
+  “airHumidity”: 0.1
+}
+
+
+
+
+
+
+Dispositivi
+Retrieve Dispositivi metodo: GET
+input: id zona
+output: lista dispositivi (dispositivo: id, tipo)
+note: no zona inesistente
+Retrieve stato Attuatore metodo: GET
+input: id dispositivo
+output: stato attuatore (true/false)
+note: no dispositivo inesistente, no dispositivi che non sono attuatori
+Retrieve Dati misura metodo: GET
+input: id dispositivo (raspberry), tipo misura, start date, end date
+output: dati misura aggregati (max 60 valori aggregati con media) in formato tupla (tempo:valore)
+note: no dispositivo inesistente, no dispositivi che non sono raspberry, no tipo di misura misura errata, no range tempo errato (start > end, valori negativi o cose simili)
+esempio:
+[
+  [0, 12.5],
+  [5, 13.2],
+  [10, 13.4],
+  [15, 13.5]
+]
+Retrieve ultime misure Raspberry metodo: GET
+input: id dispositivo (raspberry)
+output: ultimi valori misurati per ogni misura (temperatura, soil hum., air hum., illuminance, ph)
+note: no dispositivo inesistente, no dispositivi che non sono raspberry, no tipo di misura misura errata, no range tempo errato (start > end, valori negativi o cose simili)
+esempio:
+{
+  “temperature”: 16,
+  “soilHumidity”: 0.4,
+  “airHumidity”: 0.3,
+  “illuminance”: 441,
+  “ph”: 6.9
+}
+Retrieve Consumi Attuatore metodo: GET
+input: id dispositivo (attuatore), start date, end date
+output: dati misura aggregati (max 60 valori aggregati con media) in formato tupla (tempo:valore)
+note: no dispositivo inesistente, no dispositivi che non sono attuatori, no range tempo errato (start > end, valori negativi o cose simili), unità misura Watt
+Esempio:
+[
+  [0, 0.5],
+  [5, 0.7],
+  [10, 1.1],
+  [15, 1.2]
+]

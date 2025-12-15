@@ -13,6 +13,7 @@ class Queries(object):
         "light",
         "light_natural",
         "soil_humidity",
+        "power",
     }
 
     TIME_RANGES = {

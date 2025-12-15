@@ -1,65 +1,142 @@
-# Adapters/mongo/app.py
+import cherrypy
 import os
-from datetime import datetime
-from typing import Dict, Any, List, Optional
+import json
+from Mongo_DB_adapter import MongoAdapter
 
-from fastapi import FastAPI, HTTPException, Query
-
-from Mongo_DB_adapter import MongoAdapter  # usa la tua classe
-
-# Config da variabili d'ambiente (ci pensa docker-compose a passarle)
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://root:rootpassword@mongo:27017/")
 DB_NAME = os.getenv("MONGO_DB", "greenbox")
 
-mongo = MongoAdapter(MONGO_URI, DB_NAME)
+class MongoService:
+    exposed = True
 
-app = FastAPI(title="GreenBox Mongo Adapter")
+    def __init__(self):
+        self.mongo = MongoAdapter(MONGO_URI, DB_NAME)
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "time": datetime.utcnow().isoformat()}
+    @cherrypy.tools.json_out()
+    def GET(self, *path, **params):
+        if not path:
+            return {"status": "Mongo Adapter Ready"}
+        
+        if path[0] == 'verify-device':
+            device_id = params.get('device_id')
+            return {"exists": self.mongo.verify_device_existence(device_id)}
+        
+        if path[0] == 'greenhouses':
+            if len(path) == 1:
+                username = params.get('username')
+                query = {"owner": username} if username else {}
+                items = list(self.mongo.db.greenhouses.find(query, {"_id": 0}))
+                return {"items": items}
+            elif len(path) == 2:
+                gh_id = path[1]
+                gh = self.mongo.retrieve_greenhouse(gh_id)
+                if not gh: raise cherrypy.HTTPError(404)
+                gh.pop("_id", None)
+                return gh
 
-@app.get("/verify-device")
-def verify_device(device_id: str = Query(...)):
-    """
-    Verifica se un device esiste nel catalogo.
-    """
-    exists = mongo.verify_device_existence(device_id)
-    return {"exists": exists}
+        if path[0] == 'zones':
+            if len(path) == 1:
+                gh_id = params.get('greenhouse_id')
+                return {"items": self.mongo.retrieve_zones(gh_id)}
+            elif len(path) == 3 and path[2] == 'strategy':
+                zone_id = path[1]
+                return self.mongo.retrieve_zone_strategy(zone_id)
 
-@app.get("/greenhouses")
-def list_greenhouses(username: str = Query(None)):
-    """
-    Ritorna le serre. Se username è fornito, filtra per owner == username.
-    """
-    query = {}
-    if username:
-        query["owner"] = username   # oppure "tenant_id" se cambi schema
+        if path[0] == 'devices':
+            if len(path) == 1:
+                zone_id = params.get('zone_id')
+                items = list(self.mongo.db.devices.find({"zone_id": zone_id}, {"_id": 0}))
+                return {"items": items}
+            elif len(path) == 2:
+                dev_id = path[1]
+                dev = self.mongo.retrieve_device(dev_id)
+                if not dev: raise cherrypy.HTTPError(404)
+                dev.pop("_id", None)
+                return dev
+            elif len(path) == 3 and path[2] == 'status':
+                dev_id = path[1]
+                dev = self.mongo.retrieve_device(dev_id)
+                return {"status": dev.get("status", False)}
 
-    items = list(mongo.db.greenhouses.find(query, {"_id": 0}))
-    return {"items": items}
+        raise cherrypy.HTTPError(404)
 
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def POST(self, *path, **params):
+        body = cherrypy.request.json
+        
+        if path[0] == 'users':
+            if self.mongo.create_user(body):
+                return {"status": "created"}
+            raise cherrypy.HTTPError(409, "User exists")
+            
+        if path[0] == 'login':
+            username = body.get('username')
+            password = body.get('password')
+            user = self.mongo.retrieve_user(username)
+            if user and user.get('password') == password:
+                return {"status": "ok"}
+            raise cherrypy.HTTPError(401)
 
-@app.get("/devices")
-def list_devices(greenhouse_id: str = Query(...)):
-    """
-    Ritorna i device associati a una greenhouse.
-    """
-    items = list(mongo.db.devices.find({"greenhouse_id": greenhouse_id}, {"_id": 0}))
-    return {"items": items}
+        if path[0] == 'greenhouses':
+            if self.mongo.create_greenhouse(body):
+                return {"status": "created"}
+            raise cherrypy.HTTPError(409)
 
-@app.get("/greenhouses/{greenhouse_id}")
-def get_greenhouse(greenhouse_id: str):
-    gh = mongo.retrieve_greenhouse(greenhouse_id)
-    if not gh:
-        raise HTTPException(status_code=404, detail="greenhouse_not_found")
-    gh.pop("_id", None)
-    return gh
+        raise cherrypy.HTTPError(404)
 
-@app.get("/devices/{device_id}")
-def get_device(device_id: str):
-    dev = mongo.retrieve_device(device_id)
-    if not dev:
-        raise HTTPException(status_code=404, detail="device_not_found")
-    dev.pop("_id", None)
-    return dev
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def PUT(self, *path, **params):
+        body = cherrypy.request.json
+        
+        if path[0] == 'greenhouses' and len(path) == 2:
+            gh_id = path[1]
+            if self.mongo.update_greenhouse(gh_id, body):
+                return {"status": "updated"}
+            raise cherrypy.HTTPError(400)
+
+        if path[0] == 'zones':
+            if len(path) == 1:
+                if self.mongo.create_zone(body):
+                    return {"status": "created"}
+                raise cherrypy.HTTPError(409)
+            elif len(path) == 2:
+                zone_id = path[1]
+                name = body.get('name')
+                if self.mongo.rename_zone(zone_id, name):
+                    return {"status": "updated"}
+                raise cherrypy.HTTPError(400)
+            elif len(path) == 3 and path[2] == 'strategy':
+                zone_id = path[1]
+                if self.mongo.update_zone_strategy(zone_id, body):
+                    return {"status": "updated"}
+                raise cherrypy.HTTPError(400)
+
+        raise cherrypy.HTTPError(404)
+
+    @cherrypy.tools.json_out()
+    def DELETE(self, *path, **params):
+        if path[0] == 'greenhouses' and len(path) == 2:
+            res = self.mongo.db.greenhouses.delete_one({"greenhouse_id": path[1]})
+            if res.deleted_count: return {"status": "deleted"}
+            raise cherrypy.HTTPError(404)
+            
+        if path[0] == 'zones' and len(path) == 2:
+            if self.mongo.delete_zone(path[1]):
+                return {"status": "deleted"}
+            raise cherrypy.HTTPError(404)
+
+        raise cherrypy.HTTPError(404)
+
+if __name__ == '__main__':
+    conf = {
+        '/': {
+            'request.dispatch': cherrypy.dispatch.MethodDispatcher(),
+            'tools.sessions.on': True,
+            'tools.response_headers.on': True,
+            'tools.response_headers.headers': [('Content-Type', 'application/json')],
+        }
+    }
+    cherrypy.config.update({'server.socket_host': '0.0.0.0', 'server.socket_port': 8082})
+    cherrypy.quickstart(MongoService(), '/', conf)

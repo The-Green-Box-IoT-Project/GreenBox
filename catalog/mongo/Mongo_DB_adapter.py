@@ -35,17 +35,27 @@ class MongoAdapter:
         """Create a new greenhouse"""
         if self.db.greenhouses.find_one({"greenhouse_id": greenhouse_data["greenhouse_id"]}):
             return False  # Greenhouse already exists
+        # Check name uniqueness for the user
+        if self.greenhouse_name_exists(greenhouse_data["name"], greenhouse_data["owner"]):
+            return False
         self.db.greenhouses.insert_one(greenhouse_data)
         return True
 
     def greenhouse_name_exists(self, name: str, tenant_id: str) -> bool:
         return self.db.greenhouses.count_documents(
-            {"name": name, "tenant_id": tenant_id},
+            {"name": name, "owner": tenant_id},
             limit=1
         ) > 0
 
     def update_greenhouse(self, greenhouse_id: str, greenhouse_data: Dict) -> bool:
         """Update existing greenhouse data"""
+        # If name is being updated, check uniqueness
+        if "name" in greenhouse_data:
+            gh = self.retrieve_greenhouse(greenhouse_id)
+            if not gh: return False
+            if self.greenhouse_name_exists(greenhouse_data["name"], gh["owner"]):
+                return False
+        
         result = self.db.greenhouses.update_one({"greenhouse_id": greenhouse_id}, {"$set": greenhouse_data})
         return result.modified_count > 0
 
@@ -153,3 +163,46 @@ class MongoAdapter:
         if not metric_block:
             return None
         return metric_block.get(time_range)
+
+    # === ZONES ===
+    def retrieve_zones(self, greenhouse_id: str) -> List[Dict]:
+        return list(self.db.zones.find({"greenhouse_id": greenhouse_id}, {"_id": 0}))
+
+    def zone_name_exists(self, name: str, greenhouse_id: str) -> bool:
+        return self.db.zones.count_documents(
+            {"name": name, "greenhouse_id": greenhouse_id},
+            limit=1
+        ) > 0
+
+    def create_zone(self, zone_data: Dict) -> bool:
+        if self.db.zones.find_one({"zone_id": zone_data["zone_id"]}):
+            return False
+        # Check name uniqueness in the greenhouse
+        if self.zone_name_exists(zone_data["name"], zone_data["greenhouse_id"]):
+            return False
+        self.db.zones.insert_one(zone_data)
+        return True
+
+    def rename_zone(self, zone_id: str, new_name: str) -> bool:
+        zone = self.db.zones.find_one({"zone_id": zone_id})
+        if not zone: return False
+        
+        # Check name uniqueness in the greenhouse
+        if self.zone_name_exists(new_name, zone["greenhouse_id"]):
+            return False
+            
+        res = self.db.zones.update_one({"zone_id": zone_id}, {"$set": {"name": new_name}})
+        return res.modified_count > 0
+
+    def delete_zone(self, zone_id: str) -> bool:
+        res = self.db.zones.delete_one({"zone_id": zone_id})
+        return res.deleted_count > 0
+
+    def update_zone_strategy(self, zone_id: str, strategy: Dict) -> bool:
+        res = self.db.zones.update_one({"zone_id": zone_id}, {"$set": {"strategy": strategy}})
+        return res.modified_count > 0
+
+    def retrieve_zone_strategy(self, zone_id: str) -> Dict:
+        zone = self.db.zones.find_one({"zone_id": zone_id})
+        return zone.get("strategy", {}) if zone else {}
+

@@ -1,449 +1,203 @@
 import json
-from os import path
-from pathlib import Path
-from pprint import pprint
-# from Adapters.mongo.Mongo_DB_adapter import MongoAdapter
 import os
 import requests
-
+from pathlib import Path
 from .auth_token import Token
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
-USERS_FILE = P / 'users.json'
-SERVICES_FILE = P / 'services.json'
-GREENHOUSES_FILE = P / 'generator' / 'greenhouses.json'
-DEVICES_FILE = P / 'generator' / 'devices.json'
-# DEVICES_LEGEND_FILE = P / 'devices_legend.json'
-ROOT_DIR = P.parent
-STRATEGIES_FILE = ROOT_DIR / 'Control_Strategies' / 'strategies.json'
-CROP_PROFILES_FILE = ROOT_DIR / 'Control_Strategies' / 'crop_profiles.json'
-MONGO_ADAPTER_URL = os.getenv("MONGO_ADAPTER_URL", "http://127.0.0.1:8082")
-MONGO_URI = os.getenv("CATALOG_MONGO_URI", os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
-MONGO_DB = os.getenv("CATALOG_MONGO_DB", os.getenv("MONGO_DB", "greenbox"))
-# mongo_adapter = MongoAdapter(MONGO_URI, MONGO_DB)
 
+# Load configuration
+with open(CONFIG_FILE, 'r') as f:
+    config = json.load(f)
 
-def _load_json_catalog(catalog_path: Path) -> dict:
-    try:
-        with open(catalog_path, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-
-def init():
-    catalogs = [USERS_FILE, SERVICES_FILE,
-                GREENHOUSES_FILE, DEVICES_FILE,
-                STRATEGIES_FILE, CROP_PROFILES_FILE]
-    for catalog in catalogs:
-        if not path.exists(catalog):
-            with open(catalog, 'w') as f:
-                f.write(json.dumps({}))
-
+MONGO_ADAPTER_URL = config.get("mongo_adapter_url", "http://127.0.0.1:8082")
+INFLUX_ADAPTER_URL = config.get("influx_adapter_url", "http://127.0.0.1:8086")
+BROKER_IP = config.get("broker_ip", "127.0.0.1")
+BROKER_PORT = config.get("broker_port", 1883)
 
 def retrieve_broker():
-    """
-    Used to retrieve ip and port of the broker
-    """
-    with open(CONFIG_FILE, 'r') as f:
-        data = json.load(f)
-        broker_ip = data['broker_ip']
-        broker_port = data['broker_port']
-    return broker_ip, broker_port
+    return BROKER_IP, BROKER_PORT
 
-
+# --- Auth ---
 def signup_user(username, password):
-    """
-    Used to register a new user into the system.
-    """
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-    if username in users:
+    url = f"{MONGO_ADAPTER_URL}/users"
+    try:
+        response = requests.post(url, json={"username": username, "password": password})
+        return response.status_code == 200 or response.status_code == 201
+    except requests.RequestException:
         return False
-    users[username] = {
-        'password': password,
-        'greenhouses': []
-    }
-    with open(USERS_FILE, 'w') as f:
-        f.write(json.dumps(users))
-    return True
-
 
 def validate_login(username, password):
-    """
-    Used to validate login credentials and give a session token to the
-    user.
-    """
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-    if username not in users:
+    url = f"{MONGO_ADAPTER_URL}/login"
+    try:
+        response = requests.post(url, json={"username": username, "password": password})
+        if response.status_code == 200:
+            token = Token.generate(username)
+            return Token.serialize(token)
         return None
-    if not users[username]['password'] == password:
+    except requests.RequestException:
         return None
-    token = Token.generate(username)
-    return Token.serialize(token)
-
 
 def verify_token(token_http):
-    """
-    Used to verify the validity of a specific session token.
-    """
     if token_http is None:
         return False
     return not Token.deserialize(token_http).is_expired()
 
-
 def retrieve_username_by_token(token_http):
-    """
-    Used to retrieve the username given a specific session token.
-    """
     if token_http is None:
         return None
     token = Token.deserialize(token_http)
     return token.username
 
-
-# Existence
-def verify_device_existence(device_id: str) -> bool:
-    # device = mongo_adapter.retrieve_device(device_id)
-    device = requests.get(f"{MONGO_ADAPTER_URL}/verify-device",
-                          params={
-                              "device_id": device_id
-                          }).json().get("exists")
-    return device
-
-
-def verify_greenhouse_existence(greenhouse_id: str) -> bool:
-    greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
-    if greenhouse:
-        return True
-    greenhouses = _load_json_catalog(GREENHOUSES_FILE)
-    return greenhouse_id in greenhouses
-
-
-# Ownership
-def retrieve_greenhouse_ownership(greenhouse_id):
-    """
-    Used to retrieve the owner of a specific greenhouse
-    """
-    greenhouse = mongo_adapter.retrieve_greenhouse(greenhouse_id)
-    if greenhouse:
-        return greenhouse.get('tenant_id')
-    greenhouses = _load_json_catalog(GREENHOUSES_FILE)
-    return (greenhouses.get(greenhouse_id, {}) or {}).get('owner')
-
-"""
-ESEMPIO
-"""
-def get_measurements(measurement_type, start_time, end_time, zone_id):
-    url = f"http://influxdb_adapter_url/measurements"
-    params = {
-        "measurement_type": measurement_type,
-        "start_time": start_time,
-        "end_time": end_time,
-        "zone_id": zone_id
-    }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return {"error": "Failed to retrieve measurements", "status_code": response.status_code}
-
-
-def retrieve_device_ownership(device_id):
-    """
-    Used to retrieve the owner of a specific device
-    """
-    device = mongo_adapter.retrieve_device(device_id)
-    if device:
-        return device.get('owner')
-    devices = _load_json_catalog(DEVICES_FILE)
-    return (devices.get(device_id, {}) or {}).get('owner')
-
-
-def verify_greenhouse_ownership(greenhouse_id, username):
-    """
-    Used to verify if a greenhouse is owned by the user.
-    """
-    return retrieve_greenhouse_ownership(greenhouse_id) == username
-
-
-def verify_device_ownership(device_id, username):
-    """
-    Used to verify if a device is owned by the user.
-    """
-    return retrieve_device_ownership(device_id) == username
-
-
-def is_greenhouse_available(greenhouse_id):
-    """
-    Returns true if a greenhouse is available.
-    """
-    owner = retrieve_greenhouse_ownership(greenhouse_id)
-    return owner is None
-
-
-def is_device_available(device_id):
-    """
-    Returns true if a device is available and ready to be associated to a greenhouse.
-    """
-    device = mongo_adapter.retrieve_device(device_id)
-    if device:
-        return not device.get('greenhouse_id') and not device.get('associated_greenhouse')
-    devices = _load_json_catalog(DEVICES_FILE)
-    entry = devices.get(device_id)
-    if not entry:
-        return False
-    associated = entry.get('associated_greenhouse') or entry.get('greenhouse_id')
-    return associated is None
-
-
-# Retrieving
+# --- Greenhouses ---
 def retrieve_greenhouses(username):
-    """
-    Used to retrieve all the greenhouses owned by the given user.
-    """
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    with open(DEVICES_LEGEND_FILE, 'r') as f:
-        devices_legend = json.load(f)
-    owned_greenhouses = users[username]['greenhouses']
-    out_greenhouses = list()
-    for greenhouse_id in owned_greenhouses:
-        greenhouse = {
-            'id': greenhouse_id,
-            'name': greenhouses[greenhouse_id]['name'],
-            'devices': []
-        }
-        gh_devices = retrieve_devices(greenhouse_id)
-        for device_id in gh_devices:
-            device_type = devices[device_id]["device_type"]
-            device_name = devices[device_id]["name"]
-            device = devices_legend[device_type]
-            device['id'] = device_id
-            device['name'] = device_name
-            device['type'] = device_type
-            greenhouse['devices'].append(device)
-        out_greenhouses.append(greenhouse)
-    return out_greenhouses
-
-
-def retrieve_devices(greenhouse_id):
-    """
-    Used to retrieve all the devices registered under the given
-    greenhouse.
-    """
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    if greenhouse_id in greenhouses:
-        return greenhouses[greenhouse_id]['devices']
-    return None
-
-
-# Association
-def associate_greenhouse(greenhouse_id, greenhouse_name, username):
-    """
-    Used to associate a greenhouse to a user.
-    """
-    # Updating user's catalog
-    with open(USERS_FILE, 'r') as f:
-        users = json.load(f)
-    users[username]['greenhouses'].append(greenhouse_id)
-    with open(USERS_FILE, 'w') as f:
-        f.write(json.dumps(users))
-    # Updating greenhouses' catalog
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    greenhouses[greenhouse_id]['owner'] = username
-    greenhouses[greenhouse_id]['name'] = greenhouse_name
-    with open(GREENHOUSES_FILE, 'w') as f:
-        f.write(json.dumps(greenhouses))
-
-
-def associate_device(device_id, greenhouse_id, device_name, username):
-    """
-    Used to associate a device to a user and its greenhouse.
-    """
-    # Updating greenhouses' catalog
-    with open(GREENHOUSES_FILE, 'r') as f:
-        greenhouses = json.load(f)
-    greenhouses[greenhouse_id]['devices'].append(device_id)
-    with open(GREENHOUSES_FILE, 'w') as f:
-        f.write(json.dumps(greenhouses))
-    # Updating devices' catalog
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    devices[device_id]['owner'] = username
-    devices[device_id]['associated_greenhouse'] = greenhouse_id
-    devices[device_id]['name'] = device_name
-    with open(DEVICES_FILE, 'w') as f:
-        f.write(json.dumps(devices))
-
-
-def retrieve_device_association(device_id):
-    """
-    Used to retrieve the greenhouse associated to the given device.
-    Note: if device is not associated, it will return None.
-    """
-    device = mongo_adapter.retrieve_device(device_id)
-    if device:
-        return device.get('greenhouse_id') or device.get('associated_greenhouse')
-    devices = _load_json_catalog(DEVICES_FILE)
-    entry = devices.get(device_id)
-    if not entry:
-        return None
-    return entry.get('associated_greenhouse') or entry.get('greenhouse_id')
-
-
-# ------------------- DEVICE STATUS (anagrafica: legacy; runtime in services.json) -------------------
-
-def retrieve_device_status(device_id: str):
-    """
-    Legacy: legge 'status' da devices.json se presente (evitare in produzione).
-    Per il runtime vero usare services/services.json via resolver GET /device/status.
-    """
-    with open(DEVICES_FILE, 'r') as file:
-        devices = json.load(file)
-    if device_id not in devices:
-        return None
-    return devices[device_id].get('status', 'unknown')
-
-
-def update_device_status(device_id: str, new_status: str):
-    """
-    Legacy: scrive 'status' in devices.json (solo per compatibilità).
-    Il runtime corretto viene gestito dal resolver in services.json.
-    """
-    with open(DEVICES_FILE, 'r') as file:
-        devices = json.load(file)
-    if device_id not in devices:
-        return False
-    devices[device_id]['status'] = new_status
-    with open(DEVICES_FILE, 'w') as file:
-        json.dump(devices, file, indent=2)
-    return True
-
-
-# ------------------- CROPS (solo lettura preset) -------------------
-
-def list_crops():
-    with open(CROP_PROFILES_FILE, 'r') as f:
-        return json.load(f)
-
-
-# ------------------- STRATEGY & CROPS -------------------
-
-def _available_roles_in_greenhouse(greenhouse_id):
-    """
-    Raccoglie i roles effettivi dei device associati alla serra
-    filtrando devices.json per greenhouse_id.
-    """
-    with open(DEVICES_FILE, 'r') as f:
-        devices = json.load(f)
-    roles = set()
-    for d in devices.values():
-        if d.get('greenhouse_id') == greenhouse_id and d.get('role'):
-            roles.add(d['role'])
-    return roles
-
-
-def set_crop_for_greenhouse(greenhouse_id: str, crop: str, username: str):
-    if not verify_greenhouse_existence(greenhouse_id):
-        return None, 'greenhouse_not_available'
-    if not verify_greenhouse_ownership(greenhouse_id, username):
-        return None, 'greenhouse_not_available'
-
-    with open(CROP_PROFILES_FILE, 'r') as f:
-        profiles = json.load(f)
-    if crop not in profiles:
-        return None, 'crop_not_found'
-    profile = profiles[crop]
-
-    roles_ok = _available_roles_in_greenhouse(greenhouse_id)
-
-    cloned = {
-        "crop": crop,
-        "profile_version": profile.get("version", 1),
-        "targets": profile.get("targets", {}),
-        "controls": {}
-    }
-    for role, ctrl in profile.get("controls", {}).items():
-        if role in roles_ok:
-            cloned["controls"][role] = ctrl
-
-    with open(STRATEGIES_FILE, 'r') as f:
-        strategies = json.load(f)
-    strategies[greenhouse_id] = cloned
-    with open(STRATEGIES_FILE, 'w') as f:
-        json.dump(strategies, f, indent=2)
-
-    return cloned, None
-
-
-def update_strategy(greenhouse_id: str, username: str, update: dict):
-    if not verify_greenhouse_existence(greenhouse_id):
-        return None, 'greenhouse_not_available'
-    if not verify_greenhouse_ownership(greenhouse_id, username):
-        return None, 'greenhouse_not_available'
-
-    with open(STRATEGIES_FILE, 'r') as f:
-        strategies = json.load(f)
-    if greenhouse_id not in strategies:
-        return None, 'strategy_not_found'
-
-    current = strategies[greenhouse_id]
-
-    if 'targets' in update and isinstance(update['targets'], dict):
-        for k, v in update['targets'].items():
-            if isinstance(v, dict):
-                mn = v.get('min')
-                mx = v.get('max')
-                if mn is not None and mx is not None and mn >= mx:
-                    return None, f'invalid_range_{k}'
-                current.setdefault('targets', {})
-                cur = current['targets'].get(k, {})
-                cur.update(v)
-                current['targets'][k] = cur
-
-    if 'controls' in update and isinstance(update['controls'], dict):
-        roles_ok = _available_roles_in_greenhouse(greenhouse_id)
-        for role, ctrl_patch in update['controls'].items():
-            if role not in roles_ok:
-                return None, f'role_not_available:{role}'
-            base = current['controls'].get(role, {})
-            if not isinstance(ctrl_patch, dict):
-                return None, f'invalid_control:{role}'
-            base.update(ctrl_patch)
-            current['controls'][role] = base
-
-    strategies[greenhouse_id] = current
-    with open(STRATEGIES_FILE, 'w') as f:
-        json.dump(strategies, f, indent=2)
-    return current, None
-
-def retrieve_greenhouses_from_mongo(username: str):
-    """
-    Test: invece di leggere da greenhouses.json, chiediamo le serre
-    al microservizio Mongo Adapter.
-    username -> usato come 'tenant' per il filtro.
-    """
     url = f"{MONGO_ADAPTER_URL}/greenhouses"
     try:
-        resp = requests.get(url, params={"username": username}, timeout=5)
-        resp.raise_for_status()
-    except Exception as e:
-        print("Errore chiamando Mongo Adapter:", e)
+        response = requests.get(url, params={"username": username})
+        if response.status_code == 200:
+            return response.json().get("items", [])
+        return []
+    except requests.RequestException:
         return []
 
-    data = resp.json()
-    # Il resolver originale si aspetta una lista di ID serre
-    return [gh.get("greenhouse_id") for gh in data.get("items", []) if gh.get("greenhouse_id")]
+def add_greenhouse(name, username):
+    url = f"{MONGO_ADAPTER_URL}/greenhouses"
+    try:
+        response = requests.post(url, json={"name": name, "owner": username})
+        return response.status_code == 200 or response.status_code == 201
+    except requests.RequestException:
+        return False
 
+def rename_greenhouse(greenhouse_id, name):
+    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}"
+    try:
+        response = requests.put(url, json={"name": name})
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
 
-if __name__ == '__main__':
-    pprint(retrieve_greenhouses('alice88'))
+def delete_greenhouse(greenhouse_id):
+    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}"
+    try:
+        response = requests.delete(url)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+# --- Zones ---
+def retrieve_zones(greenhouse_id):
+    url = f"{MONGO_ADAPTER_URL}/zones"
+    try:
+        response = requests.get(url, params={"greenhouse_id": greenhouse_id})
+        if response.status_code == 200:
+            return response.json().get("items", [])
+        return []
+    except requests.RequestException:
+        return []
+
+def add_zone(greenhouse_id, zone_id, zone_name):
+    url = f"{MONGO_ADAPTER_URL}/zones"
+    try:
+        response = requests.put(url, json={"greenhouse_id": greenhouse_id, "zone_id": zone_id, "name": zone_name})
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+def rename_zone(zone_id, zone_name):
+    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}"
+    try:
+        response = requests.put(url, json={"name": zone_name})
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+def delete_zone(zone_id):
+    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}"
+    try:
+        response = requests.delete(url)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+def modify_control_strategy(zone_id, thresholds):
+    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}/strategy"
+    try:
+        response = requests.put(url, json=thresholds)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+def retrieve_control_strategy(zone_id):
+    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}/strategy"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        return {}
+    except requests.RequestException:
+        return {}
+
+# --- Devices ---
+def retrieve_devices(zone_id):
+    url = f"{MONGO_ADAPTER_URL}/devices"
+    try:
+        response = requests.get(url, params={"zone_id": zone_id})
+        if response.status_code == 200:
+            return response.json().get("items", [])
+        return []
+    except requests.RequestException:
+        return []
+
+def retrieve_actuator_status(device_id):
+    url = f"{MONGO_ADAPTER_URL}/devices/{device_id}/status"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json().get("status")
+        return False
+    except requests.RequestException:
+        return False
+
+# --- Measurements (Influx) ---
+def retrieve_measurements(device_id, measurement_type, start_time, end_time):
+    url = f"{INFLUX_ADAPTER_URL}/measurements"
+    params = {
+        "device_id": device_id,
+        "measurement_type": measurement_type,
+        "start_time": start_time,
+        "end_time": end_time
+    }
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        return []
+    except requests.RequestException:
+        return []
+
+def retrieve_last_measurements(device_id):
+    url = f"{INFLUX_ADAPTER_URL}/measurements/last"
+    params = {"device_id": device_id}
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        return {}
+    except requests.RequestException:
+        return {}
+
+def retrieve_actuator_consumption(device_id, start_time, end_time):
+    url = f"{INFLUX_ADAPTER_URL}/consumption"
+    params = {
+        "device_id": device_id,
+        "start_time": start_time,
+        "end_time": end_time
+    }
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        return []
+    except requests.RequestException:
+        return []

@@ -6,8 +6,8 @@ ENV PYTHONPATH=/app
 
 COPY . /app/
 
-RUN pip install --no-cache-dir fastapi uvicorn pymongo
+RUN pip install --no-cache-dir cherrypy pymongo
 
 EXPOSE 8082
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8082"]
+CMD ["python", "app.py"]
