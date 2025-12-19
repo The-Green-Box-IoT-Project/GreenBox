@@ -9,20 +9,31 @@ class MongoAdapter:
 
     # === USERS ===
     def retrieve_user(self, username: str) -> Dict:
-        """Retrieve user by username"""
-        user = self.db.users.find_one({"user_id": username})
+        """Retrieve user by username."""
+        user = self.db.users.find_one({"username": username})
         return user if user else {}
 
     def create_user(self, user_data: Dict) -> bool:
-        """Create a new user"""
-        if self.db.users.find_one({"user_id": user_data["user_id"]}):
-            return False  # User already exists
-        self.db.users.insert_one(user_data)
+        """Create a new user."""
+        username = user_data.get("username")
+        password = user_data.get("password")
+        email = user_data.get("email")
+        if not username or not password or not email:
+            return False
+        if self.db.users.find_one({"username": username}):
+            return False
+        self.db.users.insert_one({
+            "username": username,
+            "password": password,
+            "email": email,
+            # Canonical: list of {greenhouse_id, name}
+            "greenhouses": user_data.get("greenhouses", []),
+        })
         return True
 
     def update_user(self, username: str, user_data: Dict) -> bool:
-        """Update existing user data"""
-        result = self.db.users.update_one({"user_id": username}, {"$set": user_data})
+        """Update existing user data."""
+        result = self.db.users.update_one({"username": username}, {"$set": user_data})
         return result.modified_count > 0
 
     # === GREENHOUSES ===
@@ -33,12 +44,29 @@ class MongoAdapter:
 
     def create_greenhouse(self, greenhouse_data: Dict) -> bool:
         """Create a new greenhouse"""
-        if self.db.greenhouses.find_one({"greenhouse_id": greenhouse_data["greenhouse_id"]}):
+        if not greenhouse_data:
+            return False
+        gh_id = greenhouse_data.get("greenhouse_id")
+        owner = greenhouse_data.get("owner")
+        name = greenhouse_data.get("name")
+        if not gh_id or not owner or not name:
+            return False
+
+        if self.db.greenhouses.find_one({"greenhouse_id": gh_id}):
             return False  # Greenhouse already exists
         # Check name uniqueness for the user
-        if self.greenhouse_name_exists(greenhouse_data["name"], greenhouse_data["owner"]):
+        if self.greenhouse_name_exists(name, owner):
             return False
         self.db.greenhouses.insert_one(greenhouse_data)
+
+        # Keep user's greenhouse references in sync: add {greenhouse_id, name}
+        try:
+            self.db.users.update_one(
+                {"username": owner},
+                {"$addToSet": {"greenhouses": {"greenhouse_id": gh_id, "name": name}}},
+            )
+        except Exception:
+            pass
         return True
 
     def greenhouse_name_exists(self, name: str, tenant_id: str) -> bool:
@@ -59,6 +87,45 @@ class MongoAdapter:
         result = self.db.greenhouses.update_one({"greenhouse_id": greenhouse_id}, {"$set": greenhouse_data})
         return result.modified_count > 0
 
+    def update_greenhouse_owned(self, greenhouse_id: str, username: str, greenhouse_data: Dict) -> bool:
+        """Update greenhouse only if owned by username."""
+        gh = self.db.greenhouses.find_one({"greenhouse_id": greenhouse_id, "owner": username})
+        if not gh:
+            return False
+        if "name" in greenhouse_data and self.greenhouse_name_exists(greenhouse_data["name"], username):
+            return False
+        result = self.db.greenhouses.update_one(
+            {"greenhouse_id": greenhouse_id, "owner": username},
+            {"$set": greenhouse_data},
+        )
+
+        # If the greenhouse name changed, reflect it in user's embedded list
+        if result.modified_count > 0 and "name" in (greenhouse_data or {}):
+            try:
+                self.db.users.update_one(
+                    {"username": username},
+                    {"$set": {"greenhouses.$[g].name": greenhouse_data["name"]}},
+                    array_filters=[{"g.greenhouse_id": greenhouse_id}],
+                )
+            except Exception:
+                pass
+        return result.modified_count > 0
+
+    def delete_greenhouse_owned(self, greenhouse_id: str, username: str) -> bool:
+        """Delete greenhouse only if owned by username."""
+        res = self.db.greenhouses.delete_one({"greenhouse_id": greenhouse_id, "owner": username})
+
+        # Remove from user's embedded list (best-effort)
+        if res.deleted_count > 0:
+            try:
+                self.db.users.update_one(
+                    {"username": username},
+                    {"$pull": {"greenhouses": {"greenhouse_id": greenhouse_id}}},
+                )
+            except Exception:
+                pass
+        return res.deleted_count > 0
+
     def verify_greenhouse_existence(self, greenhouse_id: str) -> bool:
         """Check if a greenhouse exists."""
         return self.db.greenhouses.count_documents({"greenhouse_id": greenhouse_id}, limit=1) > 0
@@ -66,7 +133,7 @@ class MongoAdapter:
     def verify_greenhouse_ownership(self, greenhouse_id: str, username: str) -> bool:
         """Check if the greenhouse is owned by (associated to) the given username."""
         return self.db.greenhouses.count_documents(
-            {"greenhouse_id": greenhouse_id, "tenant_id": username},
+            {"greenhouse_id": greenhouse_id, "owner": username},
             limit=1
         ) > 0
 
@@ -165,6 +232,21 @@ class MongoAdapter:
         return metric_block.get(time_range)
 
     # === ZONES ===
+    def retrieve_zone(self, zone_id: str) -> Dict:
+        zone = self.db.zones.find_one({"zone_id": zone_id})
+        return zone if zone else {}
+
+    def verify_zone_existence(self, zone_id: str) -> bool:
+        return self.db.zones.count_documents({"zone_id": zone_id}, limit=1) > 0
+
+    def verify_zone_ownership(self, zone_id: str, username: str) -> bool:
+        zone = self.retrieve_zone(zone_id)
+        if not zone:
+            return False
+        gh_id = zone.get("greenhouse_id")
+        if not gh_id:
+            return False
+        return self.verify_greenhouse_ownership(gh_id, username)
     def retrieve_zones(self, greenhouse_id: str) -> List[Dict]:
         return list(self.db.zones.find({"greenhouse_id": greenhouse_id}, {"_id": 0}))
 
@@ -175,12 +257,68 @@ class MongoAdapter:
         ) > 0
 
     def create_zone(self, zone_data: Dict) -> bool:
+        if not zone_data or not zone_data.get("zone_id") or not zone_data.get("greenhouse_id") or not zone_data.get("name"):
+            return False
+
         if self.db.zones.find_one({"zone_id": zone_data["zone_id"]}):
             return False
         # Check name uniqueness in the greenhouse
         if self.zone_name_exists(zone_data["name"], zone_data["greenhouse_id"]):
             return False
+
+        # Ensure a default strategy exists for new zones.
+        # UI-friendly nested format: {metric: {min, max}}
+        if not isinstance(zone_data.get("strategy"), dict) or not zone_data.get("strategy"):
+            zone_data["strategy"] = {
+                "temperature": {"min": 20, "max": 25},
+                "light": {"min": 300, "max": 800},
+                "airHumidity": {"min": 0.40, "max": 0.70},
+                "soilHumidity": {"min": 0.25, "max": 0.45},
+            }
+
         self.db.zones.insert_one(zone_data)
+
+        # Auto-create the 4 actuators for the zone.
+        zone_id = zone_data["zone_id"]
+        greenhouse_id = zone_data["greenhouse_id"]
+        actuator_defs = [
+            ("fan", "Fan"),
+            ("heater", "Heater"),
+            ("irrigation", "Irrigation"),
+            ("light", "Light"),
+        ]
+        device_ids = []
+        device_docs = []
+        for suffix, display_name in actuator_defs:
+            device_id = f"{zone_id}_{suffix}"
+            device_ids.append(device_id)
+            device_docs.append(
+                {
+                    "device_id": device_id,
+                    "greenhouse_id": greenhouse_id,
+                    "zone_id": zone_id,
+                    "type": "actuator",
+                    "role": suffix,
+                    "status": "off",
+                    "name": display_name,
+                }
+            )
+
+        if device_docs:
+            try:
+                self.db.devices.insert_many(device_docs, ordered=False)
+            except Exception:
+                # If some duplicates exist (shouldn't on fresh zone), ignore and continue.
+                pass
+
+        # Keep greenhouse.devices list in sync (best-effort).
+        try:
+            self.db.greenhouses.update_one(
+                {"greenhouse_id": greenhouse_id},
+                {"$addToSet": {"devices": {"$each": device_ids}}},
+            )
+        except Exception:
+            pass
         return True
 
     def rename_zone(self, zone_id: str, new_name: str) -> bool:
@@ -199,8 +337,11 @@ class MongoAdapter:
         return res.deleted_count > 0
 
     def update_zone_strategy(self, zone_id: str, strategy: Dict) -> bool:
-        res = self.db.zones.update_one({"zone_id": zone_id}, {"$set": {"strategy": strategy}})
-        return res.modified_count > 0
+        # Construct $set dictionary for partial updates using dot notation
+        # This allows updating "temperature" without overwriting "humidity"
+        update_fields = {f"strategy.{k}": v for k, v in strategy.items()}
+        res = self.db.zones.update_one({"zone_id": zone_id}, {"$set": update_fields})
+        return res.matched_count > 0
 
     def retrieve_zone_strategy(self, zone_id: str) -> Dict:
         zone = self.db.zones.find_one({"zone_id": zone_id})

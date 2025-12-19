@@ -1,0 +1,644 @@
+{
+	"info": {
+		"name": "GreenBox Catalog (Mongo Only)",
+		"description": "Updated for Mongo-only stack. Uses collection variables for base URL, token, greenhouse_id, zone_id.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "CATALOG_PROTOCOL",
+			"value": "http",
+			"type": "string"
+		},
+		{
+			"key": "CATALOG_HOST",
+			"value": "localhost",
+			"type": "string"
+		},
+		{
+			"key": "CATALOG_PORT",
+			"value": "8080",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "username",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "password",
+			"value": "password123",
+			"type": "string"
+		},
+		{
+			"key": "greenhouse_name",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "greenhouse_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "zone_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "zone_name",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "device_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "User Management",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate a fresh username once",
+									"if (!pm.collectionVariables.get('username')) {",
+									"  pm.collectionVariables.set('username', 'user_' + pm.variables.replaceIn('{{$randomInt}}'));",
+									"}",
+									"if (!pm.collectionVariables.get('password')) {",
+									"  pm.collectionVariables.set('password', 'password123');",
+									"}",
+									"if (!pm.collectionVariables.get('email')) {",
+									"  pm.collectionVariables.set('email', pm.collectionVariables.get('username') + '@example.com');",
+									"}",
+									"if (pm.environment) {",
+									"  pm.environment.set('email', pm.collectionVariables.get('email'));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"email\": \"{{email}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/register",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"auth_token\", jsonData.token);",
+									"// If an Environment is selected, keep it in sync",
+									"if (pm.environment) { pm.environment.set(\"auth_token\", jsonData.token); }",
+									"pm.test('token returned', function () { pm.expect(jsonData.token).to.be.ok; });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/login",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["login"]
+						}
+					}
+				},
+				{
+					"name": "Get User Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/user/info",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["user", "info"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Greenhouses",
+			"item": [
+				{
+					"name": "Get Greenhouses",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Capture greenhouse_id by matching greenhouse_name",
+									"var items = pm.response.json();",
+									"if (!Array.isArray(items)) { items = [items]; }",
+									"var name = pm.collectionVariables.get('greenhouse_name');",
+									"if (name) {",
+									"  var found = items.find(x => x && x.name === name);",
+									"  if (found && found.id) {",
+									"    pm.collectionVariables.set('greenhouse_id', found.id);",
+									"    if (pm.environment) { pm.environment.set('greenhouse_id', found.id); }",
+									"  }",
+									"}",
+									"pm.test('greenhouses list ok', function () { pm.expect(pm.response.code).to.equal(200); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/greenhouses",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["greenhouses"]
+						}
+					}
+				},
+				{
+					"name": "Create Greenhouse",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('greenhouse_name', 'Serra_' + pm.variables.replaceIn('{{$randomUUID}}'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{greenhouse_name}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/greenhouses",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["greenhouses"]
+						}
+					}
+				},
+				{
+					"name": "Rename Greenhouse",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{greenhouse_name}}_Renamed\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/greenhouses?id={{greenhouse_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["greenhouses"],
+							"query": [
+								{
+									"key": "id",
+									"value": "{{greenhouse_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Greenhouse",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/greenhouses?id={{greenhouse_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["greenhouses"],
+							"query": [
+								{
+									"key": "id",
+									"value": "{{greenhouse_id}}"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Zones",
+			"item": [
+				{
+					"name": "Add Zone",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var zid = 'Z_' + pm.variables.replaceIn('{{$randomInt}}');",
+									"var zname = 'Zone_' + pm.variables.replaceIn('{{$randomInt}}');",
+									"pm.collectionVariables.set('zone_id', zid);",
+									"pm.collectionVariables.set('zone_name', zname);",
+									"if (pm.environment) {",
+									"  pm.environment.set('zone_id', zid);",
+									"  pm.environment.set('zone_name', zname);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"zone_id\": \"{{zone_id}}\",\n  \"name\": \"{{zone_name}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones?greenhouse_id={{greenhouse_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones"],
+							"query": [
+								{
+									"key": "greenhouse_id",
+									"value": "{{greenhouse_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Zones",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('zones list ok', function () { pm.expect(pm.response.code).to.equal(200); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones?greenhouse_id={{greenhouse_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones"],
+							"query": [
+								{
+									"key": "greenhouse_id",
+									"value": "{{greenhouse_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Validate Zone",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones/validate?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones", "validate"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Rename Zone",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Renamed Zone\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Zone",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Strategy",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"temperature\": {\n    \"min\": 18,\n    \"max\": 26\n  },\n  \"soilHumidity\": {\n    \"min\": 0.25,\n    \"max\": 0.45\n  },\n  \"airHumidity\": {\n    \"min\": 0.40,\n    \"max\": 0.70\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones/strategy?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones", "strategy"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Strategy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/zones/strategy?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["zones", "strategy"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Devices",
+			"item": [
+				{
+					"name": "Get Devices",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/devices?zone_id={{zone_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["devices"],
+							"query": [
+								{
+									"key": "zone_id",
+									"value": "{{zone_id}}"
+								}
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('devices list ok', function () { pm.expect(pm.response.code).to.equal(200); });",
+									"try {",
+									"  var items = pm.response.json();",
+									"  if (items && items.length) {",
+									"    var firstAct = items.find(d => d.type === 'actuator') || items[0];",
+									"    if (firstAct && firstAct.id) {",
+									"      pm.collectionVariables.set('device_id', firstAct.id);",
+									"      if (pm.environment) { pm.environment.set('device_id', firstAct.id); }",
+									"    }",
+									"  }",
+									"} catch(e) {}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Device Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "token",
+								"value": "{{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{CATALOG_PROTOCOL}}://{{CATALOG_HOST}}:{{CATALOG_PORT}}/devices/status?device_id={{device_id}}",
+							"protocol": "http",
+							"host": ["{{CATALOG_HOST}}"],
+							"port": "{{CATALOG_PORT}}",
+							"path": ["devices", "status"],
+							"query": [
+								{
+									"key": "device_id",
+									"value": "{{device_id}}"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	]
+}

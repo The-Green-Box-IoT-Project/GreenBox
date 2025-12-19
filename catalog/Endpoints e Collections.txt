@@ -1,12 +1,10 @@
 ﻿Endpoints (richiesti da app)
 
-
 Note generali:
-* TUTTE le chiamate agli endpoint, eccetto Login e Registrazione, avranno negli HEADERS il token di autenticazione.
-* Dare nome degli endpoint in inglese (ho dato nome indicativo)
-* Quando su “output” c’è “-” vuol dire che si deve solo restituire il codice HTTP, non dati
-* per chiamate con modifiche (PUT, DELETE), verificare che l’oggetto sia effettivamente posseduto dall’utente chiamante
-
+TUTTE le chiamate agli endpoint, eccetto Login e Registrazione, avranno negli HEADERS il token di autenticazione.
+Dare nome degli endpoint in inglese (ho dato nome indicativo)
+Quando su “output” c’è “-” vuol dire che si deve solo restituire il codice HTTP, non dati
+per chiamate con modifiche (PUT, DELETE), verificare che l’oggetto sia effettivamente posseduto dall’utente chiamante
 
 Login metodo: POST
 input: username, password
@@ -18,8 +16,6 @@ note: no utenti con stesso nome
 Retrieve Info Utente metodo: GET
 input: -
 output: nome utente, [altro, da definire]
-
-
 
 
 Greenhouses
@@ -39,7 +35,6 @@ input: id greenhouse
 output: -
 note: no greenhouse inesistente
 
-
 Zone
 Retrieve Zone metodo: GET
 input: id greenhouse
@@ -56,6 +51,10 @@ esempio:
     },
     …
 ]
+Controlla validità Zona metodo: PUT
+input: id zona
+output: true/false
+note: (deve solo controllare che l’id della zona sia esistente nel db)
 Aggiunta (associazione) Zona metodo: PUT
 input: id greenhouse, id zona, nome zona
 output: -
@@ -68,6 +67,7 @@ Eliminazione (disassociazione) Zona metodo: PUT
 input: id zona
 output: -
 note: no zona inesistente
+
 Modifica Control Strategy metodo: PUT
 input: id zona, threshold delle varie misure (vedi esempio sotto, stesso oggetto)
 output: -
@@ -82,9 +82,6 @@ esempio:
   “soilHumidity”: 0.2,
   “airHumidity”: 0.1
 }
-
-
-
 
 
 

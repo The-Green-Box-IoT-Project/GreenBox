@@ -23,6 +23,7 @@ class CatalogPutRequest(Enum):
     NOT_FOUND = auto()
     RENAME_GREENHOUSE = auto()
     ADD_ZONE = auto()
+    VALIDATE_ZONE = auto()
     RENAME_ZONE = auto()
     DELETE_ZONE = auto()
     MODIFY_CONTROL_STRATEGY = auto()
@@ -122,6 +123,8 @@ class CatalogPostDispatcher:
 class CatalogPutDispatcher:
     @staticmethod
     def dispatch(path, query, body=None):
+        if CatalogPutDispatcher._is_validate_zone_request(path, query, body):
+            return CatalogPutRequest.VALIDATE_ZONE
         if CatalogPutDispatcher._is_rename_greenhouse_request(path, query, body):
             return CatalogPutRequest.RENAME_GREENHOUSE
         if CatalogPutDispatcher._is_modify_control_strategy_request(path, query):
@@ -134,6 +137,11 @@ class CatalogPutDispatcher:
         if CatalogPutDispatcher._is_delete_zone_request(path, query, body):
             return CatalogPutRequest.DELETE_ZONE
         return CatalogPutRequest.NOT_FOUND
+
+    @staticmethod
+    def _is_validate_zone_request(path, query, body):
+        has_zone_id = 'zone_id' in query or (body and 'zone_id' in body)
+        return len(path) == 2 and path[0] == 'zones' and path[1] == 'validate' and has_zone_id
 
     @staticmethod
     def _is_rename_greenhouse_request(path, query, body):

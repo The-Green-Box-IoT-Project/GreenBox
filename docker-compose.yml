@@ -31,6 +31,8 @@ services:
     image: influxdb:2
     container_name: greenbox-influxdb
     restart: unless-stopped
+    profiles:
+      - influx
     ports:
       - "8086:8086"
     environment:
@@ -44,9 +46,13 @@ services:
       - influxdb-data:/var/lib/influxdb2
 
   influx-adapter:
-    build: ./catalog/influx
+    build:
+      context: .
+      dockerfile: catalog/influx/Dockerfile
     container_name: greenbox-influx-adapter
     restart: unless-stopped
+    profiles:
+      - influx
     environment:
       INFLUXDB_URL: "http://influxdb:8086"
       INFLUXDB_TOKEN: "my-super-secret-auth-token"
@@ -73,7 +79,7 @@ services:
       CATALOG_HOST: "0.0.0.0"
     depends_on:
       - mongo-adapter
-      - influx-adapter
+      
 
 volumes:
   mongo-data:

@@ -15,7 +15,10 @@ db.users.insertMany([
   {
     username: "alice88",
     password: "secret",
-    greenhouses: ["GH_001"]
+    email: "alice88@example.com",
+    greenhouses: [
+      { greenhouse_id: "GH_001", name: "SerraAlice" }
+    ]
   }
 ]);
 
@@ -25,8 +28,14 @@ db.greenhouses.insertOne({
   greenhouse_id: "GH_001",
   owner: "alice88",
   name: "SerraAlice",
-  // Il nuovo codice si aspetta una lista unica 'devices', non separata
-  devices: ["rb00101", "fan01", "heater01", "irrigation01"], 
+  // Canonical: greenhouse keeps a flat list of device_id strings
+  devices: [
+    "rb00101",
+    "Z_001_fan",
+    "Z_001_heater",
+    "Z_001_irrigation",
+    "Z_001_light"
+  ],
   created_at: new Date(),
   updated_at: new Date()
 });
@@ -39,15 +48,23 @@ db.zones.insertMany([
     zone_id: "Z_001",
     name: "Zona Pomodori",
     strategy: {
-        temperature: { min: 20, max: 25 },
-        humidity: { min: 40, max: 60 }
+      temperature: { min: 20, max: 25 },
+      light: { min: 300, max: 800 },
+      airHumidity: { min: 0.40, max: 0.70 },
+      soilHumidity: { min: 0.25, max: 0.45 }
     }
   },
   {
     greenhouse_id: "GH_001",
     zone_id: "Z_002",
     name: "Zona Insalata",
-    strategy: {}
+    // Canonical: every zone has a default strategy
+    strategy: {
+      temperature: { min: 20, max: 25 },
+      light: { min: 300, max: 800 },
+      airHumidity: { min: 0.40, max: 0.70 },
+      soilHumidity: { min: 0.25, max: 0.45 }
+    }
   }
 ]);
 
@@ -64,21 +81,39 @@ db.devices.insertMany([
     name: "Main Controller"
   },
   {
-    device_id: "fan01",
+    device_id: "Z_001_fan",
     greenhouse_id: "GH_001",
     zone_id: "Z_001",
     type: "actuator",
-    role: "ventilation_system",
+    role: "fan",
     status: "off",
-    name: "Ventola Principale"
+    name: "Fan"
   },
   {
-    device_id: "heater01",
+    device_id: "Z_001_heater",
     greenhouse_id: "GH_001",
-    zone_id: "Z_002",
+    zone_id: "Z_001",
     type: "actuator",
-    role: "heating_system",
-    status: "on",
-    name: "Riscaldamento"
+    role: "heater",
+    status: "off",
+    name: "Heater"
+  },
+  {
+    device_id: "Z_001_irrigation",
+    greenhouse_id: "GH_001",
+    zone_id: "Z_001",
+    type: "actuator",
+    role: "irrigation",
+    status: "off",
+    name: "Irrigation"
+  },
+  {
+    device_id: "Z_001_light",
+    greenhouse_id: "GH_001",
+    zone_id: "Z_001",
+    type: "actuator",
+    role: "light",
+    status: "off",
+    name: "Light"
   }
 ]);

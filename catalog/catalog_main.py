@@ -47,7 +47,10 @@ class Catalog:
         if body == "":
             body = {}
         else:
-            body = json.loads(body)
+            try:
+                body = json.loads(body)
+            except ValueError:
+                raise cherrypy.HTTPError(status=400, message='invalid_json')
         # Dispatch
         request = CatalogPostDispatcher.dispatch(path=path,
                                                  query=query)
@@ -65,7 +68,10 @@ class Catalog:
         if body == "":
             body = {}
         else:
-            body = json.loads(body)
+            try:
+                body = json.loads(body)
+            except ValueError:
+                raise cherrypy.HTTPError(status=400, message='invalid_json')
         # Dispatch
         request = CatalogPutDispatcher.dispatch(path=path,
                                                 query=query,
