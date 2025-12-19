@@ -53,10 +53,14 @@ def validate_authentication(headers, query=None):
 
 class CatalogGetResolver:
     @staticmethod
-    def resolve(request: CatalogGetRequest, query, headers):
+    def resolve(request: CatalogGetRequest, path, query, headers):
         match request:
             case CatalogGetRequest.RETRIEVE_BROKER:
                 return CatalogGetResolver._retrieve_broker()
+            case CatalogGetRequest.GREENHOUSE_THRESHOLDS:
+                return CatalogGetResolver._retrieve_greenhouse_thresholds(path)
+            case CatalogGetRequest.GREENHOUSE_EFFECTS:
+                return CatalogGetResolver._retrieve_greenhouse_effects(path)
             case CatalogGetRequest.USER_INFO:
                 return CatalogGetResolver._user_info(query, headers)
             case CatalogGetRequest.RETRIEVE_GREENHOUSES:
@@ -81,6 +85,28 @@ class CatalogGetResolver:
     def _retrieve_broker():
         ip, port = catalog_interface.retrieve_broker()
         return {'broker_ip': ip, 'broker_port': port}
+
+    @staticmethod
+    def _extract_greenhouse_id(path):
+        if len(path) >= 2 and path[0] == 'greenhouses':
+            return path[1]
+        return None
+
+    @staticmethod
+    def _retrieve_greenhouse_thresholds(path):
+        gh_id = CatalogGetResolver._extract_greenhouse_id(path)
+        if not gh_id:
+            raise cherrypy.HTTPError(status=400, message='missing_greenhouse_id')
+        thresholds = catalog_interface.retrieve_greenhouse_thresholds(gh_id) or {}
+        return {'greenhouse_id': gh_id, 'thresholds': thresholds}
+
+    @staticmethod
+    def _retrieve_greenhouse_effects(path):
+        gh_id = CatalogGetResolver._extract_greenhouse_id(path)
+        if not gh_id:
+            raise cherrypy.HTTPError(status=400, message='missing_greenhouse_id')
+        effects = catalog_interface.retrieve_greenhouse_effects(gh_id) or []
+        return {'greenhouse_id': gh_id, 'effects': effects}
 
     @staticmethod
     def _user_info(query, headers):

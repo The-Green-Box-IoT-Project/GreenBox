@@ -37,6 +37,7 @@ class Catalog:
         headers = cherrypy.request.headers
         # Resolve
         response = CatalogGetResolver.resolve(request=request,
+                                              path=path,
                                               query=query,
                                               headers=headers)
         return response

@@ -5,6 +5,8 @@ class CatalogGetRequest(Enum):
     RETRIEVE_BROKER = auto()
     USER_INFO = auto()
     RETRIEVE_GREENHOUSES = auto()
+    GREENHOUSE_THRESHOLDS = auto()
+    GREENHOUSE_EFFECTS = auto()
     RETRIEVE_ZONES = auto()
     RETRIEVE_CONTROL_STRATEGY = auto()
     RETRIEVE_DEVICES = auto()
@@ -37,6 +39,10 @@ class CatalogGetDispatcher:
     def dispatch(path, query):
         if CatalogGetDispatcher._is_broker_request(path):
             return CatalogGetRequest.RETRIEVE_BROKER
+        if CatalogGetDispatcher._is_greenhouse_thresholds_request(path):
+            return CatalogGetRequest.GREENHOUSE_THRESHOLDS
+        if CatalogGetDispatcher._is_greenhouse_effects_request(path):
+            return CatalogGetRequest.GREENHOUSE_EFFECTS
         if CatalogGetDispatcher._is_user_info_request(path):
             return CatalogGetRequest.USER_INFO
         if CatalogGetDispatcher._is_retrieve_greenhouses_request(path):
@@ -60,6 +66,14 @@ class CatalogGetDispatcher:
     @staticmethod
     def _is_broker_request(path):
         return len(path) == 1 and path[0] == 'broker'
+
+    @staticmethod
+    def _is_greenhouse_thresholds_request(path):
+        return len(path) == 3 and path[0] == 'greenhouses' and path[2] == 'thresholds'
+
+    @staticmethod
+    def _is_greenhouse_effects_request(path):
+        return len(path) == 3 and path[0] == 'greenhouses' and path[2] == 'effects'
 
     @staticmethod
     def _is_user_info_request(path):

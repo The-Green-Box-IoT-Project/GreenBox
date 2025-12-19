@@ -1,10 +1,8 @@
 import os
 import requests
 import json
-import csv
 import pandas as pd
-from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Set
 
 from greenbox.sim.thresholds.thresholds import Threshold
 
@@ -71,12 +69,60 @@ def get_broker_info() -> Tuple[str, int]:
 
 
 def get_greenhouses(token: str) -> List[Dict[str, Any]]:
-    """Return the full greenhouses topology payload for the user."""
+    """Return the list of greenhouses (id + name) for the user."""
     r = requests.get(
-        f"{catalog_url()}/retrieve/greenhouses", headers={"token": token}, timeout=5
+        f"{catalog_url()}/greenhouses", headers={"token": token}, timeout=5
     )
     r.raise_for_status()
-    return r.json()["greenhouses"]
+    data = r.json()
+    if isinstance(data, list):
+        return data
+    raise ValueError("Unexpected payload when retrieving greenhouses")
+
+
+def _get_zones(token: str, greenhouse_id: str) -> List[Dict[str, Any]]:
+    """Return zones for the given greenhouse."""
+    if not greenhouse_id:
+        return []
+    r = requests.get(
+        f"{catalog_url()}/zones",
+        headers={"token": token},
+        params={"greenhouse_id": greenhouse_id},
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data if isinstance(data, list) else []
+
+
+def _get_devices(token: str, zone_id: str) -> List[Dict[str, Any]]:
+    """Return devices registered for the given zone."""
+    if not zone_id:
+        return []
+    r = requests.get(
+        f"{catalog_url()}/devices",
+        headers={"token": token},
+        params={"zone_id": zone_id},
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data if isinstance(data, list) else []
+
+
+def _get_zone_strategy(token: str, zone_id: str) -> Dict[str, Any]:
+    """Retrieve the normalized strategy for a zone."""
+    if not zone_id:
+        return {}
+    r = requests.get(
+        f"{catalog_url()}/zones/strategy",
+        headers={"token": token},
+        params={"zone_id": zone_id},
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data if isinstance(data, dict) else {}
 
 
 # --- High-Level Service-Specific Functions ---
@@ -101,13 +147,22 @@ def get_device_config(device_id: str) -> Dict[str, Any]:
         if not gh_id:
             continue
 
-        for device in gh.get("devices", []):
-            if device.get("type") == "raspberry" and device.get("id") == device_id:
-                return {
-                    "greenhouse_id": gh_id,
-                    "broker_ip": broker_ip,
-                    "broker_port": broker_port,
-                }
+        zones = _get_zones(token, gh_id)
+        for zone in zones:
+            zone_id = zone.get("id")
+            if not zone_id:
+                continue
+            devices = _get_devices(token, zone_id)
+            for device in devices:
+                if (
+                    device.get("type") == "raspberry"
+                    and device.get("id") == device_id
+                ):
+                    return {
+                        "greenhouse_id": gh_id,
+                        "broker_ip": broker_ip,
+                        "broker_port": broker_port,
+                    }
 
     raise ValueError(
         f"Device with ID '{device_id}' not found in any greenhouse for this user."
@@ -135,21 +190,30 @@ def get_all_zones_with_measurements() -> Dict[str, Any]:
         if not gh_id:
             continue
 
-        raspberries = [d for d in gh.get("devices", []) if d.get("type") == "raspberry"]
-        sensors = [d for d in gh.get("devices", []) if "sensor" in d.get("name", "")]
+        raspberry_ids: Set[str] = set()
+        measurement_names: Set[str] = set()
 
-        measurements = set()
-        for sensor in sensors:
-            for measurement in sensor.get("measurements", []):
-                m_type = measurement.get("type")
-                if m_type:
-                    measurements.add(m_type)
+        zones = _get_zones(token, gh_id)
+        for zone in zones:
+            zone_id = zone.get("id")
+            if not zone_id:
+                continue
+
+            for device in _get_devices(token, zone_id):
+                dev_id = device.get("id")
+                if device.get("type") == "raspberry" and dev_id:
+                    raspberry_ids.add(str(dev_id))
+
+            strategy = _get_zone_strategy(token, zone_id)
+            for metric in strategy.keys():
+                if isinstance(metric, str) and metric:
+                    measurement_names.add(metric)
 
         processed_greenhouses.append(
             {
                 "greenhouse_id": gh_id,
-                "raspberries": [rb.get("id") for rb in raspberries if rb.get("id")],
-                "measurements": sorted(list(measurements)),
+                "raspberries": sorted(raspberry_ids),
+                "measurements": sorted(measurement_names),
             }
         )
 
@@ -162,52 +226,54 @@ def get_all_zones_with_measurements() -> Dict[str, Any]:
 
 def get_thresholds_config(greenhouse_id: str) -> Dict[str, Threshold]:
     """
-    (Used by: controller)
-    Artifice: Loads threshold configuration from the local CSV file.
-    In the future, this will query the MongoDB `crop_profiles` collection.
+    Retrieve threshold configuration directly from the catalog (Mongo backend).
     """
-    # This path is relative to the project root, assuming utils is in a package
-    thresholds_path = Path(__file__).parent.parent / "sim/thresholds/thresholds.csv"
+    if not greenhouse_id:
+        raise ValueError("greenhouse_id is required for thresholds retrieval.")
 
-    out: Dict[str, Threshold] = {}
-    try:
-        with thresholds_path.open(newline="", encoding="utf-8") as f:
-            for r in csv.DictReader(f):
-                rec = {
-                    k.strip().lower(): (v if v != "" else None) for k, v in r.items()
-                }
-                name_raw = (rec.get("metric") or "").strip()
-                name = (
-                    "pH"
-                    if name_raw.lower().replace("-", "").replace("_", "") == "ph"
-                    else name_raw
-                )
-                lo = rec.get("lower", rec.get("min"))
-                hi = rec.get("upper", rec.get("max"))
-                db = rec.get(
-                    "deadband", rec.get("dead_band", rec.get("tolerance", 0.0))
-                )
-                if lo is None or hi is None:
-                    raise ValueError(f"Threshold missing bounds for metric '{name}'")
-                out[name] = Threshold(float(lo), float(hi), float(db or 0.0))
-    except FileNotFoundError:
-        raise RuntimeError(
-            f"CRITICAL: Thresholds configuration file not found at {thresholds_path}"
-        )
-    return out
+    r = requests.get(
+        f"{catalog_url()}/greenhouses/{greenhouse_id}/thresholds",
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    payload = data.get("thresholds") if isinstance(data, dict) else data
+
+    if not isinstance(payload, dict) or not payload:
+        raise RuntimeError(f"No thresholds configured for greenhouse {greenhouse_id}")
+
+    normalized: Dict[str, Threshold] = {}
+    for metric, cfg in payload.items():
+        if not isinstance(cfg, dict):
+            continue
+        lower = cfg.get("min") or cfg.get("lower")
+        upper = cfg.get("max") or cfg.get("upper")
+        deadband = cfg.get("deadband") or cfg.get("dead_band") or cfg.get("tolerance") or 0.0
+        if lower is None or upper is None:
+            raise ValueError(f"Threshold missing bounds for metric '{metric}'")
+        normalized[metric] = Threshold(float(lower), float(upper), float(deadband or 0.0))
+
+    if not normalized:
+        raise RuntimeError(f"Threshold payload empty for greenhouse {greenhouse_id}")
+    return normalized
 
 
 def get_effects_config(greenhouse_id: str) -> pd.DataFrame:
     """
-    (Used by: controller)
-    Artifice: Loads actuator effects configuration from the local CSV file.
-    In the future, this will query the MongoDB `actuator_effects` collection.
+    Retrieve actuator effects configuration directly from the catalog (Mongo backend).
     """
-    # This path is relative to the project root, assuming utils is in a package
-    effects_path = Path(__file__).parent.parent / "sim/effects/effects.csv"
-    try:
-        return pd.read_csv(effects_path)
-    except FileNotFoundError:
-        raise RuntimeError(
-            f"CRITICAL: Effects configuration file not found at {effects_path}"
-        )
+    if not greenhouse_id:
+        raise ValueError("greenhouse_id is required for effects retrieval.")
+
+    r = requests.get(
+        f"{catalog_url()}/greenhouses/{greenhouse_id}/effects",
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    payload = data.get("effects") if isinstance(data, dict) else data
+
+    if not isinstance(payload, list) or not payload:
+        raise RuntimeError(f"No actuator effects configured for greenhouse {greenhouse_id}")
+
+    return pd.DataFrame(payload)

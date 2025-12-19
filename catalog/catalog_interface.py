@@ -101,6 +101,26 @@ def delete_greenhouse(greenhouse_id, username):
     except requests.RequestException:
         return False
 
+def retrieve_greenhouse_thresholds(greenhouse_id):
+    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}/thresholds"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json().get("thresholds", {})
+        return {}
+    except requests.RequestException:
+        return {}
+
+def retrieve_greenhouse_effects(greenhouse_id):
+    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}/effects"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json().get("effects", [])
+        return []
+    except requests.RequestException:
+        return []
+
 # --- Zones ---
 def retrieve_zones(greenhouse_id):
     url = f"{MONGO_ADAPTER_URL}/zones"

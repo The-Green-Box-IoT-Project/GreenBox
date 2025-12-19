@@ -43,6 +43,12 @@ class TestCatalogMongoOnly(unittest.TestCase):
         self.assertTrue(token)
         headers = {"token": token}
 
+        r = _get("/broker")
+        self.assertEqual(r.status_code, 200, r.text)
+        broker_payload = r.json()
+        self.assertIn("broker_ip", broker_payload)
+        self.assertIn("broker_port", broker_payload)
+
         r = _get("/user/info", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json().get("username"), username)
@@ -59,6 +65,18 @@ class TestCatalogMongoOnly(unittest.TestCase):
         self.assertTrue(len(ghs) >= 1)
         gh_id = next((x["id"] for x in ghs if x.get("name") == gh_name), None)
         self.assertTrue(gh_id)
+
+        r = _get(f"/greenhouses/{gh_id}/thresholds")
+        self.assertEqual(r.status_code, 200, r.text)
+        thresholds_payload = r.json()
+        self.assertEqual(thresholds_payload.get("greenhouse_id"), gh_id)
+        self.assertIsInstance(thresholds_payload.get("thresholds"), dict)
+
+        r = _get(f"/greenhouses/{gh_id}/effects")
+        self.assertEqual(r.status_code, 200, r.text)
+        effects_payload = r.json()
+        self.assertEqual(effects_payload.get("greenhouse_id"), gh_id)
+        self.assertIsInstance(effects_payload.get("effects"), list)
 
         zone_id = f"Z_{uuid.uuid4().hex[:8]}"
         r = _put(f"/zones?greenhouse_id={gh_id}&zone_id={zone_id}&name=Zone%201", headers=headers)

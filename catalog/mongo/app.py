@@ -68,6 +68,20 @@ class MongoService:
                 if not gh: raise cherrypy.HTTPError(404)
                 gh.pop("_id", None)
                 return gh
+            elif len(path) == 3 and path[2] == 'thresholds':
+                gh_id = path[1]
+                thresholds = self.mongo.retrieve_greenhouse_thresholds(gh_id)
+                return {
+                    "greenhouse_id": gh_id,
+                    "thresholds": thresholds or {}
+                }
+            elif len(path) == 3 and path[2] == 'effects':
+                gh_id = path[1]
+                effects = self.mongo.retrieve_greenhouse_effects(gh_id)
+                return {
+                    "greenhouse_id": gh_id,
+                    "effects": effects or []
+                }
 
         if path[0] == 'zones':
             if len(path) == 1:
