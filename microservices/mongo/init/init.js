@@ -6,114 +6,119 @@ var db = db.getSiblingDB(dbName);
 // --- PULIZIA ---
 db.users.drop();
 db.greenhouses.drop();
+db.zones.drop();
 db.devices.drop();
-db.zones.drop(); // Nuova collezione
 
 // ========== USERS ==========
+// L'utente contiene l'array di ID delle serre possedute
 db.createCollection("users");
 db.users.insertMany([
   {
-    username: "alice88",
-    password: "secret",
-    email: "alice88@example.com",
+    username: "senpai",
+    password: "iot",
     greenhouses: [
-      { greenhouse_id: "GH_001", name: "SerraAlice" }
+      "GH_001"
     ]
   }
 ]);
 
 // ========== GREENHOUSES ==========
+// La serra contiene l'array di ID delle zone
 db.createCollection("greenhouses");
 db.greenhouses.insertOne({
   greenhouse_id: "GH_001",
-  owner: "alice88",
-  name: "SerraAlice",
-  // Canonical: greenhouse keeps a flat list of device_id strings
-  devices: [
-    "rb00101",
-    "Z_001_fan",
-    "Z_001_heater",
-    "Z_001_irrigation",
-    "Z_001_light"
-  ],
-  created_at: new Date(),
-  updated_at: new Date()
+  name: "Serra dei Senpais",
+  zones: [
+    "ZONE_001",
+    "ZONE_002"
+  ]
 });
 
-// ========== ZONES (NUOVO) ==========
+// ========== ZONES ==========
+// Le zone contengono la strategia specifica e l'elenco dei device ID
 db.createCollection("zones");
 db.zones.insertMany([
   {
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001",
+    zone_id: "ZONE_001",
     name: "Zona Pomodori",
     strategy: {
-      temperature: { min: 20, max: 25 },
-      light: { min: 300, max: 800 },
-      airHumidity: { min: 0.40, max: 0.70 },
-      soilHumidity: { min: 0.25, max: 0.45 }
-    }
+      temperature: {
+        min: 20,
+        max: 25
+      },
+      light: {
+        enabled: "false",
+        start: 10,
+        end: 15
+      },
+      airHumidity: {
+        min: 0.4,
+        max: 0.7
+      },
+      soilHumidity: {
+        min: 0.25,
+        max: 0.45
+      }
+    },
+    devices: [
+      "RB_001",
+      "VENT_001",
+      "HEAT_001",
+      "LIGHT_001",
+      "IRRIG_001",
+      "HUM_001"
+    ]
   },
   {
-    greenhouse_id: "GH_001",
-    zone_id: "Z_002",
+    zone_id: "ZONE_002",
     name: "Zona Insalata",
-    // Canonical: every zone has a default strategy
     strategy: {
-      temperature: { min: 20, max: 25 },
-      light: { min: 300, max: 800 },
-      airHumidity: { min: 0.40, max: 0.70 },
-      soilHumidity: { min: 0.25, max: 0.45 }
-    }
+      temperature: {
+        min: 20,
+        max: 25
+      },
+      light: {
+        enabled: "true",
+        start: 10,
+        end: 15
+      },
+      airHumidity: {
+        min: 0.4,
+        max: 0.7
+      },
+      soilHumidity: {
+        min: 0.25,
+        max: 0.45
+      }
+    },
+    devices: [
+      "RB_002",
+      "VENT_002",
+      "HEAT_002",
+      "IRRIG_002",
+      "LIGHT_002",
+      "HUM_002"
+    ]
   }
 ]);
 
 // ========== DEVICES ==========
+// I device sono entità semplici referenziate dalle zone
 db.createCollection("devices");
 db.devices.insertMany([
-  {
-    device_id: "rb00101",
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001", // Associato a una zona
-    type: "raspberry",
-    role: "controller",
-    status: "online",
-    name: "Main Controller"
-  },
-  {
-    device_id: "Z_001_fan",
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001",
-    type: "actuator",
-    role: "fan",
-    status: "off",
-    name: "Fan"
-  },
-  {
-    device_id: "Z_001_heater",
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001",
-    type: "actuator",
-    role: "heater",
-    status: "off",
-    name: "Heater"
-  },
-  {
-    device_id: "Z_001_irrigation",
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001",
-    type: "actuator",
-    role: "irrigation",
-    status: "off",
-    name: "Irrigation"
-  },
-  {
-    device_id: "Z_001_light",
-    greenhouse_id: "GH_001",
-    zone_id: "Z_001",
-    type: "actuator",
-    role: "light",
-    status: "off",
-    name: "Light"
-  }
+  // Devices per Zona 1
+  { device_id: "RB_001", type: "raspberry" },
+  { device_id: "VENT_001", type: "ventilation_system" },
+  { device_id: "HEAT_001", type: "heating_system" },
+  { device_id: "IRRIG_001", type: "irrigation_system" },
+  { device_id: "LIGHT_001", type: "illumination_system" },
+  { device_id: "HUM_001", type: "humidification_system" },
+  
+  // Devices per Zona 2
+  { device_id: "RB_002", type: "raspberry" },
+  { device_id: "VENT_002", type: "ventilation_system" },
+  { device_id: "HEAT_002", type: "heating_system" },
+  { device_id: "IRRIG_002", type: "irrigation_system" },
+  { device_id: "LIGHT_002", type: "illumination_system" },
+  { device_id: "HUM_002", type: "humidification_system" }
 ]);
