@@ -1,0 +1,9 @@
+services:
+  control-strategies:
+    build:
+      context: ..
+      dockerfile: ./controller/Dockerfile
+    container_name: control-strategies
+    restart: unless-stopped
+    environment:
+      - CATALOG_URL=http://catalog:8484

@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from typing import List, Dict, Any, Tuple, Set
 
-from greenbox.sim.thresholds.thresholds import Threshold
+from devices.sim.thresholds.thresholds import Threshold
 
 # --- Low-Level API Functions ---
 

@@ -8,8 +8,8 @@ from pprint import pformat
 from datetime import datetime, timezone
 
 import pandas as pd
-from greenbox.utils.mqtt import MyMQTT
-from greenbox.utils import catalog_client
+from devices.utils.mqtt import MyMQTT
+from devices.utils import catalog_client
 
 class Actuator:
     """

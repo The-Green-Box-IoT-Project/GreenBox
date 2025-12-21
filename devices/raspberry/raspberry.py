@@ -3,8 +3,8 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 from typing import Dict, Any
 
-from greenbox.raspberry.sensors import Sensor, SensorSim
-from greenbox.utils.catalog_client import get_device_config
+from devices.raspberry.sensors import Sensor, SensorSim
+from devices.utils.catalog_client import get_device_config
 
 
 class RaspberryHub:

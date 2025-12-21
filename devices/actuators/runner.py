@@ -5,9 +5,9 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-from greenbox.actuators.actuators import Actuator
-from greenbox.utils.catalog_client import get_broker_info # Changed import
-from greenbox.utils.logging import setup_logger
+from devices.actuators.actuators import Actuator
+from devices.utils.catalog_client import get_broker_info # Changed import
+from devices.utils.logging import setup_logger
 
 
 def find_actuator_config(actuator_id: str, config_data: dict) -> dict:

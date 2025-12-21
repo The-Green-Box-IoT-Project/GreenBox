@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-from greenbox.raspberry.raspberry import RaspberryHub
-from greenbox.utils.logging import setup_logger
+from devices.raspberry.raspberry import RaspberryHub
+from devices.utils.logging import setup_logger
 
 def find_raspberry_config(raspberry_id: str, config_data: dict) -> dict:
     """

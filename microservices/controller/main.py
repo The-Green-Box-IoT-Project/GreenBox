@@ -1,13 +1,11 @@
 import logging
 import time
-from dotenv import load_dotenv
-from greenbox.utils.logging import setup_logger
-from greenbox.controller.controller import Controller
+from utils.logging import setup_logger
+from controller import Controller
 
 
 def main():
-    """Start the control bridge (Controller) and keep it alive."""
-    load_dotenv()
+    """Start the control bridge (Controller) and keep it alive.""" 
 
     ctrl = Controller()
     setup_logger("controller")

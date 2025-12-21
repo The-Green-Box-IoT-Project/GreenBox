@@ -1,0 +1,9 @@
+services:
+  statistics:
+    build:
+      context: ..
+      dockerfile: ./statistics/Dockerfile
+    container_name: statistics
+    restart: unless-stopped
+    environment:
+      - CATALOG_URL=http://catalog:8484

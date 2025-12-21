@@ -1,8 +1,8 @@
 import logging
 import time
 from dotenv import load_dotenv
-from greenbox.utils.logging import setup_logger
-from greenbox.statistics.statistics import StateAggregator
+from utils.logging import setup_logger
+from statistics import StateAggregator
 
 
 def main():

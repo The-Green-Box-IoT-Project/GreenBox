@@ -27,10 +27,10 @@ configs:
       log_dest stdout
 
 services:
-  catalog-api:
+  influx-adapter:
     build: .
-    container_name: catalog-api
-    ports: ["8080:8080"]
+    container_name: influx-adapter
+    ports: ["8186:8080"]
     networks: [caronte]
     environment:
       - INFLUXDB_URL=http://influxdb3:8181
@@ -62,7 +62,7 @@ services:
   mosquitto:
     container_name: mosquitto
     image: eclipse-mosquitto:2
-    ports: ["1883:1883"]
+    # ports: ["1883:1883"]
     # Usa le 'configs' e i volumi gestiti da Docker
     configs:
       - source: mosquitto_config

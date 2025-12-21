@@ -4,8 +4,8 @@ import json
 import threading
 import logging
 
-from greenbox.utils.mqtt import MyMQTT
-from greenbox.sim.mockseries.mockseries import SimulateRealTimeReading
+from devices.utils.mqtt import MyMQTT
+from devices.sim.mockseries.mockseries import SimulateRealTimeReading
 
 load_dotenv()
 

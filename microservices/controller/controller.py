@@ -3,10 +3,10 @@ import logging
 from typing import Any, Dict, Tuple
 from dataclasses import dataclass
 
-from greenbox.utils.mqtt import MyMQTT
+from utils.mqtt import MyMQTT
 # Importa il modulo catalog_client in modo unificato
-from greenbox.utils import catalog_client
-from greenbox.controller.optimizer import Optimizer, LightOptimizer, PhMonitor
+from utils import catalog_client
+from optimizer import Optimizer, LightOptimizer, PhMonitor
 
 
 @dataclass

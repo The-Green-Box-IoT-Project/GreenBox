@@ -3,10 +3,10 @@ from typing import Dict, List, Tuple, Any, Optional
 import math
 import pandas as pd
 
-from greenbox.sim.thresholds.thresholds import Threshold
+from devices.sim.thresholds.thresholds import Threshold
 
 
-class Optimizer:
+class Optimizer: 
     """
     Multi-objective optimizer (excludes pH and Light):
       - Derives per-metric net derivatives from actuator effects.
