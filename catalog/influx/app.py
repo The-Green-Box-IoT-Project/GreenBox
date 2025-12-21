@@ -87,5 +87,6 @@ if __name__ == '__main__':
             'tools.response_headers.headers': [('Content-Type', 'application/json')],
         }
     }
-    cherrypy.config.update({'server.socket_host': '0.0.0.0', 'server.socket_port': 8086})
+    port = int(os.environ.get("PORT", 8080))
+    cherrypy.config.update({'server.socket_host': '0.0.0.0', 'server.socket_port': port})
     cherrypy.quickstart(InfluxService(), '/', conf)

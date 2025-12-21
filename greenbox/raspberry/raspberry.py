@@ -21,7 +21,12 @@ class RaspberryHub:
         associated_sensors = local_config.get("sensors", [])
 
         # Get context (greenhouse, broker) from the central catalog
-        device_context = get_device_config(self.raspberry_id)
+        # device_context = get_device_config(self.raspberry_id)
+        device_context = {
+            "broker_ip": "127.0.0.1",
+            "broker_port": 1883,
+            "greenhouse_id": "gh01",
+        }
         self.broker_ip = device_context["broker_ip"]
         self.broker_port = device_context["broker_port"]
         self.greenhouse_id = device_context["greenhouse_id"]

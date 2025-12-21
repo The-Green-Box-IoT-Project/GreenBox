@@ -1,0 +1,97 @@
+version: '3.8'
+
+networks:
+  caronte: {}
+
+# Definiamo i volumi gestiti da Docker
+volumes:
+  influxdb3_data: {}
+  influxdb3_plugins: {}
+  grafana_data: {}
+  mosquitto_data: {} # Nuovo volume per i dati di Mosquitto
+  mosquitto_log: {}  # Nuovo volume per i log di Mosquitto
+
+# Definiamo qui le configurazioni
+configs:
+  # Carica il file telegraf.conf dalla stessa directory
+  telegraf_config:
+    file: ./telegraf.conf
+  
+  # Definisce la configurazione di mosquitto direttamente qui
+  mosquitto_config:
+    content: |
+      listener 1883 0.0.0.0
+      allow_anonymous true
+      persistence true
+      persistence_location /mosquitto/data/
+      log_dest stdout
+
+services:
+  catalog-api:
+    build: .
+    container_name: catalog-api
+    ports: ["8080:8080"]
+    networks: [caronte]
+    environment:
+      - INFLUXDB_URL=http://influxdb3:8181
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_BUCKET=greenbox
+      - INFLUXDB_ORG=
+    depends_on: [influxdb3]
+    restart: unless-stopped
+
+  influxdb3:
+    container_name: influxdb3
+    image: influxdb:3-core
+    command: >
+      influxdb3 serve
+      --node-id=node0
+      --object-store=file
+      --data-dir=/var/lib/influxdb3/data
+      --plugin-dir=/var/lib/influxdb3/plugins
+    ports: ["8181:8181"]
+    environment:
+      - INFLUXDB_DB=greenbox 
+    volumes:
+      - influxdb3_data:/var/lib/influxdb3/data
+      - influxdb3_plugins:/var/lib/influxdb3/plugins
+    networks: [caronte]
+    restart: unless-stopped
+    user: "0:0"
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    # Usa le 'configs' e i volumi gestiti da Docker
+    configs:
+      - source: mosquitto_config
+        target: /mosquitto/config/mosquitto.conf
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks: [caronte]
+    restart: unless-stopped
+
+  telegraf:
+    container_name: telegraf
+    image: telegraf:1.30
+    depends_on: [mosquitto, influxdb3]
+    # Usa le 'configs' invece dei volumi per il file di configurazione
+    configs:
+      - source: telegraf_config
+        target: /etc/telegraf/telegraf.conf
+    environment:
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+    networks: [caronte]
+    restart: unless-stopped
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    ports: ["3000:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks: [caronte]
+    depends_on: [influxdb3]
+    restart: unless-stopped

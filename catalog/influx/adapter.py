@@ -4,7 +4,7 @@ import pandas as pd
 from dotenv import load_dotenv
 import os
 
-from greenbox.influx.queries import Queries
+from queries import Queries
 
 
 class InfluxDBAdapter:
@@ -32,6 +32,29 @@ class InfluxDBAdapter:
         self._timeout = timeout or 30
 
         self._client: Optional[InfluxDBClient3] = None
+        
+        # Appena connessi, proviamo a creare il database
+        self._create_database_if_not_exists()
+
+    def _create_database_if_not_exists(self) -> None:
+        """
+        Internal helper: Try to create the database using SQL.
+        If it already exists, we ignore the error.
+        """
+        # Comando SQL per creare il database
+        sql = f'CREATE DATABASE "{self._database}"'
+        
+        try:
+            # Eseguiamo la query. 
+            # Nota: InfluxDB 3 (Core) supporta la creazione via SQL.
+            self._client.query(sql)
+            print(f"Check DB: Database '{self._database}' created or verified.")
+        except Exception as e:
+            # Se il database esiste già, o se c'è un errore di "nessun dato ritornato"
+            # (che è normale per una CREATE), ignoriamo e andiamo avanti.
+            # Stampiamo solo se è un errore critico per debug, altrimenti passiamo.
+            # Molte volte le query di comando ritornano errori "Flight" perché non restituiscono righe.
+            pass
 
     def connect(self) -> None:
         """

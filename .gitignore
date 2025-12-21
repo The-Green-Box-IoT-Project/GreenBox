@@ -17,4 +17,5 @@ logs/
 backup
 backup/*
 venv
+.venv
 *.bat

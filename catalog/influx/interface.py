@@ -1,12 +1,10 @@
-import logging
 from typing import Optional
 
 import cherrypy
 import pandas as pd
 
-from greenbox.influx.adapter import InfluxDBAdapter
-from greenbox.influx.queries import Queries
-from greenbox.utils.logging import setup_logger
+from adapter import InfluxDBAdapter
+from queries import Queries
 
 
 class InfluxInterface:
@@ -86,22 +84,9 @@ class InfluxAPI:
             # FIX: Convertiamo i timestamp in stringhe per renderli serializzabili in JSON
             if not df.empty and "time" in df.columns:
                 df["time"] = df["time"].astype(str)
-
-            logging.info(
-                "GET metric=%s site=%s device=%s limit=%s time_range=%s start=%s end=%s rows=%s",
-                metric,
-                params.get("site"),
-                params.get("device"),
-                limit,
-                params.get("time_range"),
-                params.get("start"),
-                params.get("end"),
-                len(df),
-            )
             return df.to_dict(orient="records")
 
         except ValueError as e:
-            logging.warning("Bad request: %s", e)
             raise cherrypy.HTTPError(400, str(e))
         except Exception as e:
             cherrypy.log(f"ERRORE SERVER GET: {e}", traceback=True)
@@ -112,7 +97,6 @@ if __name__ == "__main__":
 
     # Carica le variabili d'ambiente (.env) per la connessione al DB
     load_dotenv()
-    setup_logger("influx_interface")
 
     cherrypy.config.update({"server.socket_port": 8081})
 
