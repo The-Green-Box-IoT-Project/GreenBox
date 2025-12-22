@@ -6,7 +6,8 @@ ENV PYTHONPATH=/app
 
 COPY . /app/
 
-RUN pip install --no-cache-dir cherrypy pymongo
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 EXPOSE 8080
 

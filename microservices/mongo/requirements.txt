@@ -1,0 +1,2 @@
+CherryPy~=18.10.0
+pymongo>=4.6,<5
