@@ -6,4 +6,13 @@ services:
     container_name: statistics
     restart: unless-stopped
     environment:
-      - CATALOG_URL=http://catalog:8484
+      - PYTHONUNBUFFERED=1
+    networks:
+      - mongo_default
+      - influx_caronte
+
+networks:
+  mongo_default:
+    external: true
+  influx_caronte:
+    external: true  

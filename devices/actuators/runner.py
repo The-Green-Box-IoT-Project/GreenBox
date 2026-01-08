@@ -2,11 +2,11 @@ import argparse
 import json
 import logging
 import time
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
 from devices.actuators.actuators import Actuator
-from devices.utils.catalog_client import get_broker_info # Changed import
 from devices.utils.logging import setup_logger
 
 
@@ -73,7 +73,7 @@ def main():
 
     # --- Broker Info ---
     try:
-        broker_ip, broker_port = get_broker_info()
+        broker_ip, broker_port = os.getenv("BROKER_IP"), int(os.getenv("BROKER_PORT"))
     except Exception as e:
         logging.error(
             f"Could not retrieve broker info from catalog: {e}", exc_info=True
@@ -87,8 +87,7 @@ def main():
         rb_id = actuator_config["rb_id"]
         actuator_type = actuator_config["type"]
 
-        # The unique client ID for MQTT can be more specific
-        mqtt_client_id = f"{args.id}_{rb_id}"
+        mqtt_client_id = args.id
 
         actuator_instance = Actuator(
             device_id=mqtt_client_id,

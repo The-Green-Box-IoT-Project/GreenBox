@@ -20,7 +20,6 @@ class Sensor:
             "units"
         ]  # Dict of measurement units (key is measurement)
         self.time_interval = float(os.getenv("TIME_INTERVAL_SENSORS"))
-        # self.time_interval = os.getenv("TIME_INTERVAL_SENSORS")
 
         self.mqtt = MyMQTT(
             clientID=self.device_id, broker=broker_ip, port=broker_port, notifier=None

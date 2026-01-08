@@ -5,4 +5,3 @@ temperature,K/s,Rate of change of air temperature
 humidity,%/s,Rate of change of relative humidity
 light,PAR,Light intensity (PAR)
 soil_humidity,/s,Rate of change of soil humidity
-pH,pH/s,Rate of change of pH

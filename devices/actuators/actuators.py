@@ -2,14 +2,13 @@ import json
 import time
 import logging
 import threading
-from typing import Dict, List
-from pathlib import Path
+from typing import Dict
 from pprint import pformat
 from datetime import datetime, timezone
 
-import pandas as pd
 from devices.utils.mqtt import MyMQTT
-from devices.utils import catalog_client
+from devices.utils.client import get_effects_config
+
 
 class Actuator:
     """
@@ -26,7 +25,7 @@ class Actuator:
         self.rb_id = rb_id
 
         # Load the simulation model (effects) for this actuator's system type
-        effects_df = catalog_client.get_effects_config(gh_id)
+        effects_df = get_effects_config()
         actuator_effects_df = effects_df[effects_df["system"] == self.system].copy()
         if actuator_effects_df.empty:
             logging.warning("[%s] No effects configuration found for system '%s'. This actuator will have no simulated effect.", self.device_id, self.system)
@@ -188,6 +187,7 @@ class Actuator:
             } | effects
             # Ensure water_consumption is always present, defaulting to 0.0 if not provided by effects
             payload.setdefault("water_consumption", 0.0)
+            payload.setdefault("energy_consumption", 0.0)
             try:
                 self.mqtt.MyPublish(self.DATA_TOPIC, payload)
             except Exception as e:

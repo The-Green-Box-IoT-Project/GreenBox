@@ -228,6 +228,37 @@ class MongoDBAdapter:
     # -------------------------
     # Zone
     # -------------------------
+    def get_info_from_device(self, greenhouse_id: str, device_id: str) -> Optional[Dict[str, str]]:
+        """
+        Dato un greenhouse_id e un device_id, risale al proprietario (username)
+        e alla zona specifica.
+        """
+        # 1. Trova l'utente
+        user_doc = self._users.find_one({"greenhouses": greenhouse_id}, {"username": 1})
+        if not user_doc:
+            return None
+
+        # 2. Trova la zona
+        zone_doc = self._zones.find_one({"devices": device_id}, {"zone_id": 1})
+        if not zone_doc:
+            return None
+        
+        found_zone_id = zone_doc["zone_id"]
+
+        # 3. Cross-check di sicurezza (la zona deve essere in quella serra)
+        gh_check = self._greenhouses.find_one({
+            "greenhouse_id": greenhouse_id,
+            "zones": found_zone_id
+        })
+        
+        if not gh_check:
+            return None
+
+        return {
+            "username": user_doc["username"],
+            "zone_id": found_zone_id
+        }
+    
     def retrieve_zones(self, username: str, greenhouse_id: str) -> List[Dict[str, str]]:
         gh = self._get_greenhouse_owned(username, greenhouse_id)
         zone_ids = list(gh.get("zones") or [])
@@ -298,11 +329,11 @@ class MongoDBAdapter:
                     "start": 10,
                     "end": 15
                 },
-                "airHumidity": {
+                "humidity": {
                     "min": 0.4,
                     "max": 0.7
                 },
-                "soilHumidity": {
+                "soil_humidity": {
                     "min": 0.25,
                     "max": 0.45
                 }
@@ -389,3 +420,57 @@ class MongoDBAdapter:
             if d:
                 out.append({"id": d["device_id"], "type": d.get("type", "")})
         return out
+
+    # -------------------------
+    # Statistics
+    # -------------------------
+    def get_all_statistics_zones(self):
+        """
+        System-wide: returns all (greenhouse_id, zone_id, raspberry_id) found in DB.
+        No username / ownership checks (intended for internal services like Statistics).
+        """
+        out = []
+
+        # iterate all greenhouses
+        cursor = self._greenhouses.find({}, {"_id": 0, "greenhouse_id": 1, "zones": 1})
+        for gh in cursor:
+            gh_id = gh.get("greenhouse_id")
+            for zone_id in (gh.get("zones") or []):
+                z = self._zones.find_one({"zone_id": zone_id}, {"_id": 0, "devices": 1})
+                if not z:
+                    continue
+
+                dev_ids = list(z.get("devices") or [])
+                if not dev_ids:
+                    continue
+
+                # fastest/common: RB_* is in devices list
+                rb_id = next((d for d in dev_ids if isinstance(d, str) and d.startswith("RB_")), None)
+
+                # fallback: use devices collection type=raspberry among those ids
+                if not rb_id:
+                    d = self._devices.find_one(
+                        {"device_id": {"$in": dev_ids}, "type": "raspberry"},
+                        {"_id": 0, "device_id": 1}
+                    )
+                    rb_id = d.get("device_id") if d else None
+
+                if rb_id:
+                    out.append({
+                        "greenhouse_id": gh_id,
+                        "zone_id": zone_id,
+                        "raspberry_id": rb_id
+                    })
+
+        return out
+
+    def get_all_measurements(self) -> List[str]:
+        """
+        Returns the list of measurements (metric names) used by raspberries.
+        Since they are the same for all, we derive them from zone.strategy keys.
+        """
+        z = self._zones.find_one({}, {"_id": 0, "strategy": 1})
+        if not z:
+            return []
+        strategy = z.get("strategy") or {}
+        return list(strategy.keys())

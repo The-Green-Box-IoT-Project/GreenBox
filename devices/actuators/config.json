@@ -1,26 +1,26 @@
 {
   "greenhouses": [
     {
-      "id": "gh01",
+      "id": "GH_001",
       "raspberries": [
         {
-          "id": "rb_001",
+          "id": "RB_001",
           "actuators": [
-            { "id": "fan_001", "type": "ventilation_system" },
-            { "id": "heater_001", "type": "heating_system" },
-            { "id": "led_001", "type": "illumination_system" },
-            { "id": "humidifier_001", "type": "humidification_system" },
-            { "id": "sprinkler_001", "type": "irrigation_system" }
+            { "id": "VENT_001", "type": "ventilation_system" },
+            { "id": "HEAT_001", "type": "heating_system" },
+            { "id": "LIGHT_001", "type": "illumination_system" },
+            { "id": "HUM_001", "type": "humidification_system" },
+            { "id": "IRRIG_001", "type": "irrigation_system" }
           ]
         },
         {
-          "id": "rb_002",
+          "id": "RB_002",
           "actuators": [
-            { "id": "fan_002", "type": "ventilation_system" },
-            { "id": "heater_002", "type": "heating_system" },
-            { "id": "led_002", "type": "illumination_system" },
-            { "id": "humidifier_002", "type": "humidification_system" },
-            { "id": "sprinkler_002", "type": "irrigation_system" }
+            { "id": "VENT_002", "type": "ventilation_system" },
+            { "id": "HEAT_002", "type": "heating_system" },
+            { "id": "LIGHT_002", "type": "illumination_system" },
+            { "id": "HUM_002", "type": "humidification_system" },
+            { "id": "IRRIG_002", "type": "irrigation_system" }
           ]
         }
       ]

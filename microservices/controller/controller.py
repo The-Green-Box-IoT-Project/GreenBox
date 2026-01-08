@@ -1,12 +1,14 @@
+import datetime
+import os
+import pandas as pd
 import json
-import logging
 from typing import Any, Dict, Tuple
 from dataclasses import dataclass
 
+from utils.threshold import Threshold
 from utils.mqtt import MyMQTT
-# Importa il modulo catalog_client in modo unificato
-from utils import catalog_client
-from optimizer import Optimizer, LightOptimizer, PhMonitor
+from optimizer import Optimizer, LightOptimizer
+from utils.client import get_thresholds, get_device_context
 
 
 @dataclass
@@ -14,17 +16,18 @@ class ZoneOptimizers:
     """Contenitore per le istanze degli ottimizzatori di una singola zona (gh_id, rb_id)."""
     main: Optimizer
     light: LightOptimizer
-    ph: PhMonitor
+    light_enabled: bool
+    light_start_hour: int
+    light_end_hour: int
 
 
 class Controller:
     """Bridge between statistics and actuators/alerts (multi-tenant, zone-aware)."""
 
     def __init__(self):
-        # Chiama direttamente le funzioni necessarie invece di log_to_catalog
-        broker_ip, broker_port = catalog_client.get_broker_info()
-        self.broker = broker_ip
-        self.port = broker_port
+        # Recupera le informazioni del broker dalle variabili d'ambiente
+        self.broker = os.environ["BROKER_IP"]
+        self.port = int(os.environ["BROKER_PORT"])
 
         self.clientID = "controller_all"
         self.mqtt = MyMQTT(
@@ -54,16 +57,48 @@ class Controller:
         if zone_key in self.optimizer_cache:
             return self.optimizer_cache[zone_key]
 
-        logging.info(
-            "[%s] No optimizer found for zone '%s/%s'. Creating new instance...",
-            self.clientID,
-            gh_id,
-            rb_id,
+        print(
+            f"[{self.clientID}] No optimizer found for zone '{gh_id}/{rb_id}'. Creating new instance..."
         )
 
-        # Usa il catalog_client unificato per caricare le configurazioni
-        thresholds = catalog_client.get_thresholds_config(gh_id)
-        effects = catalog_client.get_effects_config(gh_id)
+        username, zone_id = None, None
+        device_context = get_device_context(gh_id, rb_id)
+        if device_context:
+            username = device_context.get("username")
+            zone_id = device_context.get("zone_id")
+        if not (username and zone_id):
+            raise ValueError(
+                f"Cannot create optimizer: Unable to find username/zone_id for device '{rb_id}' in greenhouse '{gh_id}'."
+            )
+
+        thresholds_from_catalog = get_thresholds(username, zone_id)
+        effects = pd.read_csv("./effects/effects.csv")
+
+        # Converte il formato delle soglie e gestisce la configurazione della luce
+        thresholds = {}
+        light_enabled = False
+        light_start_hour = 0
+        light_end_hour = 0
+        light_config = thresholds_from_catalog.get("light", {})
+
+        if light_config.get("enabled") == "true":
+            light_enabled = True
+            light_start_hour = int(light_config.get("start", 0))
+            light_end_hour = int(light_config.get("end", 0))
+            # Usa una soglia fissa letta da variabili d'ambiente
+            light_lux_threshold = float(os.environ["LIGHT_LUX_THRESHOLD"])
+            thresholds["light"] = Threshold(
+                lower=light_lux_threshold, upper=1_000_000.0
+            )
+        else:
+            # Placeholder per evitare crash del LightOptimizer quando la luce è disabilitata
+            thresholds["light"] = Threshold(lower=0.0, upper=0.0)
+
+        for metric, values in thresholds_from_catalog.items():
+            if metric != "light":
+                thresholds[metric] = Threshold(
+                    lower=float(values["min"]), upper=float(values["max"])
+                )
 
         # Crea le nuove istanze con le configurazioni caricate
         main_opt = Optimizer(
@@ -74,15 +109,17 @@ class Controller:
         light_opt = LightOptimizer(
             thresholds_config=thresholds, effects_config_df=effects
         )
-        ph_mon = PhMonitor(thresholds_config=thresholds)
 
-        new_optimizers = ZoneOptimizers(main=main_opt, light=light_opt, ph=ph_mon)
+        new_optimizers = ZoneOptimizers(
+            main=main_opt,
+            light=light_opt,
+            light_enabled=light_enabled,
+            light_start_hour=light_start_hour,
+            light_end_hour=light_end_hour,
+        )
         self.optimizer_cache[zone_key] = new_optimizers
-        logging.info(
-            "[%s] Successfully created optimizer instance for zone '%s/%s'.",
-            self.clientID,
-            gh_id,
-            rb_id,
+        print(
+            f"[{self.clientID}] Successfully created optimizer instance for zone '{gh_id}/{rb_id}'."
         )
 
         return new_optimizers
@@ -99,10 +136,8 @@ class Controller:
             rb_id = data.get("raspberry_id")
 
             if not (gh_id and rb_id):
-                logging.warning(
-                    "[%s] Missing 'greenhouse_id' or 'raspberry_id' in payload from topic %s.",
-                    self.clientID,
-                    topic,
+                print(
+                    f"WARNING: [{self.clientID}] Missing 'greenhouse_id' or 'raspberry_id' in payload from topic {topic}."
                 )
                 return
 
@@ -129,36 +164,37 @@ class Controller:
                         }
                         self.mqtt.MyPublish(cmd_topic, msg)
                 else:
-                    logging.debug("[%s] Zone %s/%s - Main optimizer actions unchanged.", self.clientID, gh_id, rb_id)
+                    print(f"DEBUG: [{self.clientID}] Zone {gh_id}/{rb_id} - Main optimizer actions unchanged.")
 
             # --- Gestione Ottimizzatore Luce ---
-            light_data = metrics_payload.get("light")
-            if light_data and isinstance(light_data, dict) and "median" in light_data:
-                try:
-                    res_light = optimizers.light.decide(float(light_data["median"]))
-                    if res_light:
-                        cmd_topic = f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
-                        self.mqtt.MyPublish(cmd_topic, res_light)
-                except (ValueError, TypeError):
-                    logging.warning("[%s] Zone %s/%s - Non-numeric median value for total light: %s", self.clientID, gh_id, rb_id, light_data)
-
-            # --- Gestione Monitor PH ---
-            ph_data = metrics_payload.get("ph")
-            if ph_data and isinstance(ph_data, dict) and "median" in ph_data:
-                try:
-                    res_ph = optimizers.ph.decide(float(ph_data["median"]))
-                    if res_ph:
-                        alert_topic = f"/{gh_id}/{rb_id}/alerts/ph"
-                        self.mqtt.MyPublish(alert_topic, res_ph)
-                except (ValueError, TypeError):
-                    logging.warning("[%s] Zone %s/%s - Non-numeric median value for ph: %s", self.clientID, gh_id, rb_id, ph_data)
+            if optimizers.light_enabled:
+                current_hour = datetime.datetime.now().hour
+                if (
+                    optimizers.light_start_hour
+                    <= current_hour
+                    < optimizers.light_end_hour
+                ):
+                    light_data = metrics_payload.get("light")
+                    if (
+                        light_data
+                        and isinstance(light_data, dict)
+                        and "median" in light_data
+                    ):
+                        try:
+                            res_light = optimizers.light.decide(
+                                float(light_data["median"])
+                            )
+                            if res_light:
+                                cmd_topic = (
+                                    f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
+                                )
+                                self.mqtt.MyPublish(cmd_topic, res_light)
+                        except (ValueError, TypeError):
+                            print(
+                                f"WARNING: [{self.clientID}] Zone {gh_id}/{rb_id} - Non-numeric median value for total light: {light_data}"
+                            )
 
         except Exception as e:
-            logging.error(
-                "[%s] Unhandled exception in notify for topic %s with payload %s: %s",
-                self.clientID,
-                topic,
-                payload,
-                e,
-                exc_info=True,
+            print(
+                f"ERROR: [{self.clientID}] Unhandled exception in notify for topic {topic} with payload {payload}: {e}"
             )

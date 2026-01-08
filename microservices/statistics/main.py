@@ -1,22 +1,19 @@
 import logging
-import time
 from dotenv import load_dotenv
-from utils.logging import setup_logger
+import time
+
 from statistics import StateAggregator
 
 
 def main():
     """Start the statistics service (StateAggregator) and keep it alive."""
     load_dotenv()
-
+    
     # Create and start the new aggregator
     aggregator = StateAggregator()
-    setup_logger("statistics_aggregator")
 
     try:
         aggregator.start()
-        # The main thread waits here, while the aggregator runs in a background thread.
-        # This allows a graceful shutdown on KeyboardInterrupt (Ctrl+C).
         while True:
             time.sleep(1)
     except KeyboardInterrupt:

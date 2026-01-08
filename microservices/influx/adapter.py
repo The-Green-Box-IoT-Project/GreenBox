@@ -1,10 +1,8 @@
-from typing import Optional, Any
+from typing import Optional, Any, Dict
+
 from influxdb_client_3 import InfluxDBClient3
 import pandas as pd
-from dotenv import load_dotenv
 import os
-
-from queries import Queries
 
 
 class InfluxDBAdapter:
@@ -12,49 +10,28 @@ class InfluxDBAdapter:
     Minimal wrapper around InfluxDBClient3 for managing connection and queries.
     """
 
-    def __init__(
-        self,
-        timeout: int = 30,
-    ) -> None:
+    def __init__(self, timeout: int = 30) -> None:
         """
-        Initialize the client but do not connect yet.
-        Environment variables are used to configure the connection:
-        - INFLUXDB_URL: InfluxDB server URL.
-        - INFLUXDB_TOKEN: API token for authentication.
-        - INFLUXDB_BUCKET: Default bucket to use for queries.
-        - INFLUXDB_ORG: Organization name (optional, can be empty).
-        :param timeout: Request timeout in seconds.
+        Environment variables used:
+        - INFLUXDB_URL: InfluxDB server URL
+        - INFLUXDB_DATABASE: Database name (preferred)
+        - INFLUXDB_BUCKET: Database name (legacy/back-compat)
+        - INFLUXDB_TOKEN: Optional token (not needed when running InfluxDB3 Core with --without-auth)
+        - INFLUXDB_ORG: Optional org (primarily for Cloud / Dedicated)
         """
-        self._host = os.getenv("INFLUXDB_URL")
+        raw_host = os.getenv("INFLUXDB_URL")
+        self._host = raw_host.rstrip("/")
+
+        self._database = (
+            os.getenv("INFLUXDB_DATABASE")
+            or os.getenv("INFLUXDB_BUCKET")
+            or "greenbox"
+        )
         self._token = os.getenv("INFLUXDB_TOKEN")
-        self._database = os.getenv("INFLUXDB_BUCKET")
         self._org = os.getenv("INFLUXDB_ORG")
         self._timeout = timeout or 30
 
         self._client: Optional[InfluxDBClient3] = None
-        
-        # Appena connessi, proviamo a creare il database
-        self._create_database_if_not_exists()
-
-    def _create_database_if_not_exists(self) -> None:
-        """
-        Internal helper: Try to create the database using SQL.
-        If it already exists, we ignore the error.
-        """
-        # Comando SQL per creare il database
-        sql = f'CREATE DATABASE "{self._database}"'
-        
-        try:
-            # Eseguiamo la query. 
-            # Nota: InfluxDB 3 (Core) supporta la creazione via SQL.
-            self._client.query(sql)
-            print(f"Check DB: Database '{self._database}' created or verified.")
-        except Exception as e:
-            # Se il database esiste già, o se c'è un errore di "nessun dato ritornato"
-            # (che è normale per una CREATE), ignoriamo e andiamo avanti.
-            # Stampiamo solo se è un errore critico per debug, altrimenti passiamo.
-            # Molte volte le query di comando ritornano errori "Flight" perché non restituiscono righe.
-            pass
 
     def connect(self) -> None:
         """
@@ -63,77 +40,43 @@ class InfluxDBAdapter:
         if self._client is not None:
             return
 
-        self._client = InfluxDBClient3(
-            host=self._host,
-            token=self._token,
-            org=self._org,
-            database=self._database,
-            timeout=self._timeout,
-        )
+        kwargs: Dict[str, Any] = {
+            "host": self._host,
+            "database": self._database
+        }
+
+        # Token/org are optional for local Core started with --without-auth.
+        if self._token:
+            kwargs["token"] = self._token
+        if self._org:
+            kwargs["org"] = self._org
+
+        self._client = InfluxDBClient3(**kwargs)
 
     def close(self) -> None:
-        """
-        Close the underlying client and release resources.
-        """
         if self._client is not None:
             self._client.close()
             self._client = None
 
     def _ensure_client(self) -> InfluxDBClient3:
-        """
-        Internal helper to guarantee that the client is connected.
-        """
         if self._client is None:
             self.connect()
-        # mypy/typing hint
         assert self._client is not None
         return self._client
 
     def query(self, sql: str, **kwargs: Any) -> Any:
-        """
-        Execute a raw SQL query and return the low-level query result.
-
-        :param sql: SQL query string.
-        :param kwargs: Extra keyword arguments passed to client.query().
-        :return: InfluxDB query result object.
-        """
         client = self._ensure_client()
+        # Default to SQL unless the caller overrides.
+        kwargs.setdefault("language", "sql")
         return client.query(sql, **kwargs)
 
     def query_dataframe(self, sql: str, **kwargs: Any) -> pd.DataFrame:
-        """
-        Execute a SQL query and return the result as a pandas DataFrame.
-
-        :param sql: SQL query string.
-        :param kwargs: Extra keyword arguments passed to client.query().
-        :return: pandas.DataFrame with the query result.
-        """
         result = self.query(sql, **kwargs)
         return result.to_pandas()
 
-    # Optional: context manager support
     def __enter__(self) -> "InfluxDBAdapter":
-        """
-        Allow usage with 'with' statement:
-            with InfluxDB3Client(...) as client: ...
-        """
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """
-        Close the client when exiting a 'with' block.
-        """
         self.close()
-
-
-if __name__ == "__main__":
-    # Example usage
-    load_dotenv()  # Load environment variables from .env file
-
-    client = InfluxDBAdapter()
-
-    sql = Queries.sensor_data(
-        "temperature", time_range="last_hour", limit=10, order_desc=False
-    )
-    print(client.query_dataframe(sql))

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mongo:
     image: mongo:6
@@ -23,7 +21,7 @@ services:
       MONGO_URI: "mongodb://root:rootpassword@mongo:27017/"
       MONGO_DB: "greenbox"
     ports:
-      - "8082:8080"
+      - "8182:8082"
     depends_on:
       - mongo   
 

@@ -1,23 +1,17 @@
-version: '3.8'
-
 networks:
   caronte: {}
 
-# Definiamo i volumi gestiti da Docker
 volumes:
   influxdb3_data: {}
   influxdb3_plugins: {}
   grafana_data: {}
-  mosquitto_data: {} # Nuovo volume per i dati di Mosquitto
-  mosquitto_log: {}  # Nuovo volume per i log di Mosquitto
+  mosquitto_data: {}
+  mosquitto_log: {}
 
-# Definiamo qui le configurazioni
 configs:
-  # Carica il file telegraf.conf dalla stessa directory
   telegraf_config:
     file: ./telegraf.conf
-  
-  # Definisce la configurazione di mosquitto direttamente qui
+
   mosquitto_config:
     content: |
       listener 1883 0.0.0.0
@@ -30,13 +24,11 @@ services:
   influx-adapter:
     build: .
     container_name: influx-adapter
-    ports: ["8186:8080"]
+    ports: ["8186:8081"]
     networks: [caronte]
     environment:
       - INFLUXDB_URL=http://influxdb3:8181
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_BUCKET=greenbox
-      - INFLUXDB_ORG=
     depends_on: [influxdb3]
     restart: unless-stopped
 
@@ -49,9 +41,8 @@ services:
       --object-store=file
       --data-dir=/var/lib/influxdb3/data
       --plugin-dir=/var/lib/influxdb3/plugins
+      --without-auth  
     ports: ["8181:8181"]
-    environment:
-      - INFLUXDB_DB=greenbox 
     volumes:
       - influxdb3_data:/var/lib/influxdb3/data
       - influxdb3_plugins:/var/lib/influxdb3/plugins
@@ -62,8 +53,7 @@ services:
   mosquitto:
     container_name: mosquitto
     image: eclipse-mosquitto:2
-    # ports: ["1883:1883"]
-    # Usa le 'configs' e i volumi gestiti da Docker
+    ports: ["1883:1883"]
     configs:
       - source: mosquitto_config
         target: /mosquitto/config/mosquitto.conf
@@ -77,12 +67,9 @@ services:
     container_name: telegraf
     image: telegraf:1.30
     depends_on: [mosquitto, influxdb3]
-    # Usa le 'configs' invece dei volumi per il file di configurazione
     configs:
       - source: telegraf_config
         target: /etc/telegraf/telegraf.conf
-    environment:
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
     networks: [caronte]
     restart: unless-stopped
 

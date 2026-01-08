@@ -1,8 +1,8 @@
 {
   "raspberries": [
     {
-      "id": "rb_001",
-      "name": "Raspberry Pi - Zona 1",
+      "id": "RB_001",
+      "tenant_username": "senpai",
       "sensors": [
         {
           "id": "tthh_001",
@@ -17,21 +17,15 @@
           "units": { "light": "lumen" }
         },
         {
-          "id": "phph_001",
-          "pin": 3,
-          "measurements": ["pH"],
-          "units": { "pH": "pH" }
-        },
-        {
           "id": "shsh_001",
-          "pin": 4,
+          "pin": 3,
           "measurements": ["soil_humidity"],
           "units": { "soil_humidity": "%" }
         }
       ]
     },
     {
-      "id": "rb_002",
+      "id": "RB_002",
       "name": "Raspberry Pi - Zona 2",
       "sensors": [
         {
@@ -45,6 +39,12 @@
           "pin": 2,
           "measurements": ["light"],
           "units": { "light": "lumen" }
+        },
+        {
+          "id": "shsh_002",
+          "pin": 3,
+          "measurements": ["soil_humidity"],
+          "units": { "soil_humidity": "%" }
         }
       ]
     }

@@ -1,21 +1,20 @@
-import logging
 import time
-from utils.logging import setup_logger
+from dotenv import load_dotenv
 from controller import Controller
 
 
 def main():
-    """Start the control bridge (Controller) and keep it alive.""" 
-
+    """Start the control bridge (Controller) and keep it alive."""
+    load_dotenv()
+    
     ctrl = Controller()
-    setup_logger("controller")
 
     try:
         ctrl.start()
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logging.info("Interrupted, shutting down controller...")
+        print("Interrupted, shutting down controller...")
     finally:
         try:
             ctrl.stop()

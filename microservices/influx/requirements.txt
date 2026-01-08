@@ -1,0 +1,4 @@
+cherrypy
+pandas
+influxdb3-python
+python-dotenv

@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple, Any, Optional
 import math
 import pandas as pd
 
-from devices.sim.thresholds.thresholds import Threshold
+from utils.threshold import Threshold
 
 
 class Optimizer: 
@@ -297,37 +297,3 @@ class LightOptimizer:
         return None
 
 
-class PhMonitor:
-    """Emit an alert when pH goes out of limits; publish only on state change."""
-
-    def __init__(self, thresholds_config: Dict[str, Threshold]) -> None:
-        ph_threshold = None
-        for key, value in thresholds_config.items():
-            if key.lower() == "ph":
-                ph_threshold = value
-                break
-        if ph_threshold is None:
-            raise ValueError("Fatal: 'pH' threshold configuration not found.")
-
-        self.lo, self.hi = ph_threshold.lower, ph_threshold.upper
-        self.last_state: Optional[str] = None
-
-    def decide(self, median_ph: float) -> Optional[dict]:
-        lo, hi = self.lo, self.hi
-
-        if median_ph < lo:
-            state = "low"
-            msg = f"pH too low ({median_ph:.2f} < {lo})"
-        elif median_ph > hi:
-            state = "high"
-            msg = f"pH too high ({median_ph:.2f} > {hi})"
-        else:
-            state = "ok"
-            msg = None
-
-        # publish only on change (avoid duplicate alerts)
-        if state != self.last_state:
-            self.last_state = state
-            if msg:
-                return {"topic": "alerts/ph", "message": msg}
-        return None

@@ -1,14 +1,11 @@
-import logging
 import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any
-
 import pandas as pd
-from utils import catalog_client
 from utils.mqtt import MyMQTT
-from utils.influx_client import InfluxInterfaceClient
+from utils.client import get_all_stats_zones, get_measurements, get_readings
 
 
 class StateAggregator:
@@ -19,21 +16,16 @@ class StateAggregator:
     """
 
     def __init__(self):
-        # Load configuration from catalog using the new specific function
-        catalog_data = catalog_client.get_all_zones_with_measurements()
-        self.broker_ip = catalog_data["broker_ip"]
-        self.broker_port = catalog_data["broker_port"]
-        self.greenhouses_config = catalog_data["greenhouses"]
+        # Load broker from environment TODO: secondo me va aggiunto a mongo
+        self.broker_ip = os.environ.get("BROKER_IP")
+        self.broker_port = int(os.environ.get("BROKER_PORT"))
 
         # MQTT client for publishing
         self.mqtt = MyMQTT(clientID="statistics_aggregator", broker=self.broker_ip, port=self.broker_port, notifier=None)
-        
-        # InfluxDB client for querying data
-        self.influx_client = InfluxInterfaceClient()
 
         # Timing configuration from environment variables
-        self.window_minutes = int(os.getenv("STATS_WINDOW_MINUTES", "5"))
-        self.aggregation_interval_s = int(os.getenv("STATS_AGGREGATION_INTERVAL_S", "10"))
+        self.window_minutes = int(os.environ.get("STATS_WINDOW_MINUTES", "5"))
+        self.aggregation_interval_s = int(os.environ.get("STATS_AGGREGATION_INTERVAL_S", "10"))
 
         # Threading control
         self._stop_event = threading.Event()
@@ -41,84 +33,100 @@ class StateAggregator:
 
     def start(self):
         """Start the aggregator loop in a separate thread."""
-        logging.info("Starting StateAggregator...")
+        print("Starting StateAggregator...")
         self.mqtt.start()
         self._thread = threading.Thread(target=self.run, daemon=True)
         self._thread.start()
-        logging.info("StateAggregator started. Aggregation interval: %d seconds.", self.aggregation_interval_s)
+        print(f"StateAggregator started. Aggregation interval: {self.aggregation_interval_s} seconds.")
 
     def stop(self):
         """Signal the aggregator loop to stop gracefully."""
-        logging.info("Stopping StateAggregator...")
+        print("Stopping StateAggregator...")
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join()  # Wait for the thread to finish
         self.mqtt.stop()
-        logging.info("StateAggregator stopped.")
+        print("StateAggregator stopped.")
 
     def run(self):
         """The main loop of the aggregator service."""
         while not self._stop_event.is_set():
-            logging.info("Starting aggregation cycle...")
+            print("Starting aggregation cycle...")
             
             start_time = time.time()
 
-            for gh_config in self.greenhouses_config:
-                gh_id = gh_config["greenhouse_id"]
-                measurements = gh_config["measurements"]
-                
-                for rb_id in gh_config["raspberries"]:
-                    try:
-                        self._process_zone(gh_id, rb_id, measurements)
-                    except Exception as e:
-                        logging.error("[%s/%s] Failed to process zone: %s", gh_id, rb_id, e, exc_info=True)
+            # 1. Recupera la lista delle misurazioni (resiliente se il DB è giù)
+            self.measurements = get_measurements()
+            
+            # 2. Recupera le zone (resiliente)
+            zones = get_all_stats_zones()
+            
+            if not self.measurements:
+                print("[WARNING] Nessuna metrica definita o DB non raggiungibile. Salto il ciclo.")
+            elif not zones:
+                print("[WARNING] Nessuna zona definita o DB non raggiungibile. Salto il ciclo.")
+            else:
+                print("Zones received: %s", zones)
+                for z in zones:
+                    gh_id = z["greenhouse_id"]
+                    rb_id = z["raspberry_id"]
+                    self._process_zone(gh_id, rb_id, self.measurements)
 
             cycle_duration = time.time() - start_time
-            logging.info("Aggregation cycle finished in %.2f seconds.", cycle_duration)
+            print(f"Aggregation cycle finished in {cycle_duration:.2f} seconds.")
 
-            # Wait for the next cycle, accounting for processing time
+            # Wait for the next cycle
             sleep_time = max(0, self.aggregation_interval_s - cycle_duration)
             self._stop_event.wait(timeout=sleep_time)
 
     def _process_zone(self, gh_id: str, rb_id: str, measurements: List[str]):
         """Fetch, aggregate, and publish the state for a single zone."""
-        logging.debug("[%s/%s] Processing zone...", gh_id, rb_id)
+        print(f"[{gh_id}/{rb_id}] Processing zone...")
         
         aggregated_metrics = self._fetch_and_aggregate_metrics(gh_id, rb_id, measurements)
         
         if not aggregated_metrics:
+            print(f"[{gh_id}/{rb_id}] No metrics to publish.")
             return
 
         self._publish_zone_state(gh_id, rb_id, aggregated_metrics)
 
     def _fetch_and_aggregate_metrics(self, gh_id: str, rb_id: str, measurements: List[str]) -> Dict[str, Any]:
         """Query InfluxDB for all metrics and calculate the median for each."""
-        end_ts = datetime.utcnow().replace(tzinfo=timezone.utc)
+        
+        # Usa datetime.now(timezone.utc) è più moderno e sicuro di utcnow().replace
+        end_ts = datetime.now(timezone.utc)
         start_ts = end_ts - timedelta(minutes=self.window_minutes)
         
         metrics_data = {}
         
         for metric in measurements:
-            # Query InfluxDB for a single metric
-            data = self.influx_client.get_data(
+            # FIX 1: Forziamo la Z al posto di +00:00 per compatibilità con InfluxDB/Arrow
+            start_str = start_ts.isoformat().replace("+00:00", "Z")
+            end_str = end_ts.isoformat().replace("+00:00", "Z")
+
+            data = get_readings(
                 metric=metric,
-                start=start_ts.isoformat(),
-                end=end_ts.isoformat(),
-                site=gh_id,
                 device=rb_id,
-                limit=10_000,
+                start=start_str,
+                end=end_str,
             )
 
             if not data:
                 continue
 
             try:
-                df = pd.DataFrame(data)
+                # FIX 2: I dati grezzi sono una lista di liste [[time, val], ...].
+                # Pandas assegna colonne 0 e 1 di default. Dobbiamo nominarle.
+                df = pd.DataFrame(data, columns=["time", "value"])
+                
                 if "value" in df and not df["value"].empty:
-                    median_value = float(df["value"].astype(float).median()) # Explicit cast to float
+                    median_value = float(df["value"].astype(float).median()) 
                     metrics_data[metric] = {"median": round(median_value, 3)}
+                    
             except Exception as e:
-                logging.error("[%s/%s] Failed to process data for metric '%s': %s", gh_id, rb_id, metric, e)
+                # Ho aggiunto %s nell'interpolazione che mancava nel print originale se usi logging standard
+                print(f"[{gh_id}/{rb_id}] Failed to process data for metric '{metric}': {e}")
         
         return metrics_data
 
@@ -134,4 +142,4 @@ class StateAggregator:
         }
         
         self.mqtt.MyPublish(topic, payload)
-        logging.debug("[%s/%s] Payload: %s", gh_id, rb_id, payload)
+        print(f"[{gh_id}/{rb_id}] Payload: {payload}")

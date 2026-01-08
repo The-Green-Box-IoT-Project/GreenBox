@@ -55,7 +55,6 @@ def main():
             logging.info("Sensor simulation mode enabled.")
 
         hub_instance = RaspberryHub(
-            raspberry_id=args.id,
             local_config=local_config,
             is_sim=is_sim
         )

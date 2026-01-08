@@ -47,6 +47,9 @@ class MongoService:
 
         if resource == "devices" and id_param and action is None:
             return self.db.retrieve_devices(username, id_param)
+        
+        # NOTA: Ho rimosso "lookup" da qui perché MongoService richiede {username} nell'URL.
+        # La logica è stata spostata in StrategyService.
 
         raise cherrypy.HTTPError(404)
 
@@ -69,20 +72,16 @@ class MongoService:
     @cherrypy.tools.json_in()
     @handle_adapter_errors
     def PUT(self, username, *args, **kwargs):
-        # 1. Log di Debug (guarda il terminale di docker dopo la richiesta)
+        # 1. Log di Debug
         print(f"DEBUG PUT -> Username: {username} | Args: {args} | Kwargs: {kwargs}", flush=True)
 
         body = cherrypy.request.json
-        # Recupera 'id' dai query params se presente (es. ?id=GH_001)
         id_param = kwargs.get("id")
-
-        # Parsing sicuro del path
         resource = args[0] if len(args) > 0 else None
         action = args[1] if len(args) > 1 else None
 
-        # --- LOGICA ACTIONS (es. /zones/associate) ---
+        # --- LOGICA ACTIONS ---
         if resource == "zones" and action == "associate":
-            # Verifica che il body abbia i campi necessari
             if not all(k in body for k in ("greenhouse_id", "zone_id", "name")):
                 raise cherrypy.HTTPError(400, "Missing required fields in body")
             
@@ -93,8 +92,7 @@ class MongoService:
             self.db.disassociate_zone(username, body["zone_id"])
             return ""
 
-        # --- LOGICA GENERICI (con ?id=...) ---
-        # Nota: usiamo id_param estratto da kwargs
+        # --- LOGICA GENERICI ---
         if resource == "greenhouses" and id_param and action is None:
             self.db.rename_greenhouse(username, id_param, body["name"])
             return ""
@@ -107,7 +105,6 @@ class MongoService:
             self.db.update_control_strategy(username, id_param, body)
             return ""
 
-        # Se arriviamo qui, nessuna condizione è stata soddisfatta
         print(f"DEBUG 404 -> Resource: {resource}, Action: {action}, ID: {id_param}")
         raise cherrypy.HTTPError(404, "Nothing matches the given URI")
 
@@ -123,12 +120,63 @@ class MongoService:
             return ""
 
         raise cherrypy.HTTPError(404)
+    
+
+class StatisticsService:
+    exposed = True
+
+    def __init__(self):
+        self.db = MongoDBAdapter()
+
+    @cherrypy.tools.json_out()
+    @handle_adapter_errors
+    def GET(self, *args, **kwargs):
+        resource = args[0] if len(args) > 0 else None
+
+        if resource == "zones":
+            print("STAT GET args=", args, "kwargs=", kwargs, flush=True)
+            return self.db.get_all_statistics_zones()
+
+        if resource == "measurements":
+            return self.db.get_all_measurements()
+
+        raise cherrypy.HTTPError(404)
+
+
+class StrategyService:
+    exposed = True
+
+    def __init__(self):
+        self.db = MongoDBAdapter()
+
+    @cherrypy.tools.json_out()
+    @handle_adapter_errors
+    def GET(self, *args, **kwargs):
+        resource = args[0] if len(args) > 0 else None
+
+        # Endpoint: GET /strategies/lookup?greenhouse_id=...&device_id=...
+        if resource == "lookup":
+            gh_id = kwargs.get("greenhouse_id")
+            dev_id = kwargs.get("device_id")
+
+            if not gh_id or not dev_id:
+                raise cherrypy.HTTPError(400, "Missing greenhouse_id or device_id params")
+
+            # Chiama il metodo dell'adapter
+            result = self.db.get_info_from_device(gh_id, dev_id)
+
+            if not result:
+                raise cherrypy.HTTPError(404, "Device association not found")
+
+            return result
+
+        raise cherrypy.HTTPError(404)
 
 
 if __name__ == "__main__":
     cherrypy.config.update({
         "server.socket_host": "0.0.0.0",
-        "server.socket_port": 8080,
+        "server.socket_port": 8082,
         "tools.response_headers.on": True,
         "tools.response_headers.headers": [("Content-Type", "application/json")],
     })
@@ -136,6 +184,19 @@ if __name__ == "__main__":
     cherrypy.tree.mount(
         MongoService(),
         "/users",
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+    )
+
+    cherrypy.tree.mount(
+        StatisticsService(),
+        "/statistics",
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+    )
+
+    # Ora la classe StrategyService esiste ed è definita sopra
+    cherrypy.tree.mount(
+        StrategyService(),
+        "/strategies",
         {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
     )
 

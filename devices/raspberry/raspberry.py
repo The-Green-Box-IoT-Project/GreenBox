@@ -1,10 +1,11 @@
+import os
 from pprint import pformat
 from concurrent.futures import ThreadPoolExecutor
 import logging
 from typing import Dict, Any
 
 from devices.raspberry.sensors import Sensor, SensorSim
-from devices.utils.catalog_client import get_device_config
+from devices.utils.client import get_greenhouse_id
 
 
 class RaspberryHub:
@@ -13,23 +14,18 @@ class RaspberryHub:
     It receives its specific configuration upon initialization.
     """
 
-    def __init__(self, raspberry_id: str, local_config: Dict[str, Any], is_sim: bool = True):
-        self.raspberry_id = raspberry_id
+    def __init__(self, local_config: Dict[str, Any], is_sim: bool = True):
         self.is_sim = is_sim
-        
-        # Sensor configuration is passed directly from the runner
-        associated_sensors = local_config.get("sensors", [])
+
+        # Load local configuration for this Raspberry Pi
+        self.raspberry_id = local_config['id']
+        self.mongo_address = os.getenv("MONGO_ADAPTER_URL")
+        self.tenant_username = local_config['tenant_username']
+        associated_sensors = local_config['sensors']
 
         # Get context (greenhouse, broker) from the central catalog
-        # device_context = get_device_config(self.raspberry_id)
-        device_context = {
-            "broker_ip": "127.0.0.1",
-            "broker_port": 1883,
-            "greenhouse_id": "gh01",
-        }
-        self.broker_ip = device_context["broker_ip"]
-        self.broker_port = device_context["broker_port"]
-        self.greenhouse_id = device_context["greenhouse_id"]
+        self.broker_ip , self.broker_port = os.getenv("BROKER_IP"), int(os.getenv("BROKER_PORT"))
+        self.greenhouse_id = get_greenhouse_id(self.mongo_address, self.tenant_username, self.raspberry_id)
         
         logging.info(
             "[%s] Initializing. Context from catalog: [Greenhouse: %s, Broker: %s:%s]",
@@ -74,3 +70,4 @@ class RaspberryHub:
 
     def __str__(self):
         return pformat(self.__dict__, indent=1, sort_dicts=False)
+    
