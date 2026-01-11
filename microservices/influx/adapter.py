@@ -53,6 +53,13 @@ class InfluxDBAdapter:
 
         self._client = InfluxDBClient3(**kwargs)
 
+        try:
+            # Attempt to create the database on connect.
+            # If it already exists, this might raise an exception which we ignore.
+            self._client.query(f'CREATE DATABASE "{self._database}"', language="sql")
+        except Exception:
+            pass
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()
