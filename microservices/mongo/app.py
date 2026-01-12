@@ -26,9 +26,12 @@ class MongoService:
     # GET /users/<username>/...
     @cherrypy.tools.json_out()
     @handle_adapter_errors
-    def GET(self, username, *args, **kwargs):
+    def GET(self, username=None, *args, **kwargs):
+        if not username:
+            raise cherrypy.HTTPError(404)
         # Recupera 'id' dai query params (kwargs)
         id_param = kwargs.get("id")
+        greenhouse_id = kwargs.get("greenhouse_id")
         
         resource = args[0] if len(args) > 0 else None
         action = args[1] if len(args) > 1 else None
@@ -38,6 +41,9 @@ class MongoService:
 
         if resource == "greenhouses" and id_param and action is None:
             return self.db.retrieve_greenhouse(username, id_param)
+
+        if resource == "zones" and greenhouse_id and action is None:
+            return self.db.retrieve_zones(username, greenhouse_id)
 
         if resource == "zones" and id_param and action is None:
             return self.db.retrieve_zone(username, id_param)
@@ -56,8 +62,14 @@ class MongoService:
     # POST /users/<username>/greenhouses
     @cherrypy.tools.json_in()
     @handle_adapter_errors
-    def POST(self, username, *args, **kwargs):
+    def POST(self, username=None, *args, **kwargs):
         body = cherrypy.request.json
+        if not username:
+            if not all(k in body for k in ("username", "password", "email")):
+                raise cherrypy.HTTPError(400, "Missing required fields in body")
+            self.db.create_user(body["username"], body["password"], body["email"])
+            cherrypy.response.status = 201
+            return ""
         resource = args[0] if len(args) > 0 else None
         action = args[1] if len(args) > 1 else None
 
@@ -71,7 +83,9 @@ class MongoService:
     # PUT /users/<username>/...
     @cherrypy.tools.json_in()
     @handle_adapter_errors
-    def PUT(self, username, *args, **kwargs):
+    def PUT(self, username=None, *args, **kwargs):
+        if not username:
+            raise cherrypy.HTTPError(404)
         # 1. Log di Debug
         print(f"DEBUG PUT -> Username: {username} | Args: {args} | Kwargs: {kwargs}", flush=True)
 
@@ -110,7 +124,9 @@ class MongoService:
 
     # DELETE /users/<username>/greenhouses?id=...
     @handle_adapter_errors
-    def DELETE(self, username, *args, **kwargs):
+    def DELETE(self, username=None, *args, **kwargs):
+        if not username:
+            raise cherrypy.HTTPError(404)
         id_param = kwargs.get("id")
         resource = args[0] if len(args) > 0 else None
         action = args[1] if len(args) > 1 else None
@@ -121,6 +137,24 @@ class MongoService:
 
         raise cherrypy.HTTPError(404)
     
+
+class LoginService:
+    exposed = True
+
+    def __init__(self):
+        self.db = MongoDBAdapter()
+
+    @cherrypy.tools.json_in()
+    def POST(self, *args, **kwargs):
+        body = cherrypy.request.json
+        username = body.get("username")
+        password = body.get("password")
+        if not username or not password:
+            raise cherrypy.HTTPError(400, "Missing required fields in body")
+        if not self.db.verify_user(username, password):
+            raise cherrypy.HTTPError(401, "Invalid credentials")
+        return ""
+
 
 class StatisticsService:
     exposed = True
@@ -141,6 +175,38 @@ class StatisticsService:
             return self.db.get_all_measurements()
 
         raise cherrypy.HTTPError(404)
+
+
+class ZoneLookupService:
+    exposed = True
+
+    def __init__(self):
+        self.db = MongoDBAdapter()
+
+    @cherrypy.tools.json_out()
+    def GET(self, *args, **kwargs):
+        resource = args[0] if len(args) > 0 else None
+        if resource == "validate":
+            zone_id = kwargs.get("zone_id")
+            if not zone_id:
+                raise cherrypy.HTTPError(400, "Missing zone_id")
+            return {"valid": self.db.check_zone_validity(zone_id)}
+        raise cherrypy.HTTPError(404)
+
+
+class DeviceService:
+    exposed = True
+
+    def __init__(self):
+        self.db = MongoDBAdapter()
+
+    @cherrypy.tools.json_out()
+    @handle_adapter_errors
+    def GET(self, device_id, *args, **kwargs):
+        resource = args[0] if len(args) > 0 else None
+        if resource == "status":
+            return {"status": self.db.retrieve_device_status(device_id)}
+        return self.db.retrieve_device(device_id)
 
 
 class StrategyService:
@@ -188,6 +254,18 @@ if __name__ == "__main__":
     )
 
     cherrypy.tree.mount(
+        ZoneLookupService(),
+        "/zones",
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+    )
+
+    cherrypy.tree.mount(
+        DeviceService(),
+        "/devices",
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+    )
+
+    cherrypy.tree.mount(
         StatisticsService(),
         "/statistics",
         {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
@@ -197,6 +275,11 @@ if __name__ == "__main__":
     cherrypy.tree.mount(
         StrategyService(),
         "/strategies",
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+    )
+    cherrypy.tree.mount(
+        LoginService(),
+        "/login",
         {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
     )
 

@@ -37,6 +37,7 @@ class CatalogDeleteRequest(Enum):
 class CatalogGetDispatcher:
     @staticmethod
     def dispatch(path, query):
+        path = tuple(p for p in path if p)
         if CatalogGetDispatcher._is_broker_request(path):
             return CatalogGetRequest.RETRIEVE_BROKER
         if CatalogGetDispatcher._is_greenhouse_thresholds_request(path):
@@ -114,6 +115,7 @@ class CatalogGetDispatcher:
 class CatalogPostDispatcher:
     @staticmethod
     def dispatch(path, query):
+        path = tuple(p for p in path if p)
         if CatalogPostDispatcher._is_sign_up_request(path):
             return CatalogPostRequest.SIGN_UP
         if CatalogPostDispatcher._is_login_request(path):
@@ -137,6 +139,7 @@ class CatalogPostDispatcher:
 class CatalogPutDispatcher:
     @staticmethod
     def dispatch(path, query, body=None):
+        path = tuple(p for p in path if p)
         if CatalogPutDispatcher._is_validate_zone_request(path, query, body):
             return CatalogPutRequest.VALIDATE_ZONE
         if CatalogPutDispatcher._is_rename_greenhouse_request(path, query, body):
@@ -184,6 +187,7 @@ class CatalogPutDispatcher:
 class CatalogDeleteDispatcher:
     @staticmethod
     def dispatch(path, query):
+        path = tuple(p for p in path if p)
         if CatalogDeleteDispatcher._is_delete_greenhouse_request(path, query):
             return CatalogDeleteRequest.DELETE_GREENHOUSE
         return CatalogDeleteRequest.NOT_FOUND

@@ -1,7 +1,9 @@
 import json
+from datetime import datetime
+
 import cherrypy
-from . import catalog_interface
-from .catalog_dispatcher import CatalogGetRequest, CatalogPostRequest, CatalogPutRequest, CatalogDeleteRequest
+import catalog_interface
+from catalog_dispatcher import CatalogGetRequest, CatalogPostRequest, CatalogPutRequest, CatalogDeleteRequest
 
 
 def _normalize_strategy_payload(payload: dict) -> dict:
@@ -40,6 +42,58 @@ def _normalize_strategy_payload(payload: dict) -> dict:
             # Scalar legacy: store as-is.
             normalized[k] = v
     return normalized
+
+ACTUATOR_TYPES = {
+    "actuator",
+    "ventilation_system",
+    "heating_system",
+    "illumination_system",
+    "irrigation_system",
+    "humidification_system",
+}
+
+MEASUREMENT_TYPES = {
+    "temperature",
+    "humidity",
+    "light",
+    "soil_humidity",
+    "airHumidity",
+    "soilHumidity",
+    "illuminance",
+    "ph",
+}
+
+def _coerce_time_value(value: str):
+    if value is None:
+        return None
+    v = str(value).strip()
+    if not v:
+        raise ValueError("empty_time")
+    try:
+        return ("num", float(v))
+    except ValueError:
+        pass
+    try:
+        return ("dt", datetime.fromisoformat(v.replace("Z", "+00:00")))
+    except ValueError as exc:
+        raise ValueError("invalid_time") from exc
+
+def _validate_time_range(start, end):
+    start_val = _coerce_time_value(start) if start is not None else None
+    end_val = _coerce_time_value(end) if end is not None else None
+    if start_val and end_val:
+        if start_val[0] != end_val[0]:
+            raise cherrypy.HTTPError(status=400, message="invalid_time_range")
+        if start_val[1] > end_val[1]:
+            raise cherrypy.HTTPError(status=400, message="invalid_time_range")
+
+def _require_device(device_id):
+    if not device_id:
+        raise cherrypy.HTTPError(status=400, message="missing_device_id")
+    dev = catalog_interface.retrieve_device(device_id)
+    if not dev:
+        raise cherrypy.HTTPError(status=404, message="device_not_found")
+    return dev
 
 def validate_authentication(headers, query=None):
     token = (headers or {}).get('token')
@@ -127,12 +181,10 @@ class CatalogGetResolver:
         token = validate_authentication(headers, query)
         username = catalog_interface.retrieve_username_by_token(token)
         gh_id = query.get('greenhouse_id')
-        gh = catalog_interface.retrieve_greenhouse(gh_id)
+        gh = catalog_interface.retrieve_greenhouse(gh_id, username)
         if not gh:
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_found')
-        if gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
-        items = catalog_interface.retrieve_zones(gh_id)
+        items = catalog_interface.retrieve_zones(gh_id, username)
         return [{"id": it.get("zone_id"), "name": it.get("name")} for it in (items or [])]
 
     @staticmethod
@@ -140,13 +192,10 @@ class CatalogGetResolver:
         token = validate_authentication(headers, query)
         username = catalog_interface.retrieve_username_by_token(token)
         zone_id = query.get('zone_id')
-        zone = catalog_interface.retrieve_zone(zone_id)
+        zone = catalog_interface.retrieve_zone(zone_id, username)
         if not zone:
             raise cherrypy.HTTPError(status=404, message='zone_not_found')
-        gh = catalog_interface.retrieve_greenhouse(zone.get('greenhouse_id'))
-        if not gh or gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
-        strategy = catalog_interface.retrieve_control_strategy(zone_id)
+        strategy = catalog_interface.retrieve_control_strategy(zone_id, username)
         return _normalize_strategy_payload(strategy or {})
 
     @staticmethod
@@ -156,15 +205,12 @@ class CatalogGetResolver:
         zone_id = query.get('zone_id')
         if not zone_id:
             raise cherrypy.HTTPError(status=400, message='missing_zone_id')
-        zone = catalog_interface.retrieve_zone(zone_id)
+        zone = catalog_interface.retrieve_zone(zone_id, username)
         if not zone:
             raise cherrypy.HTTPError(status=404, message='zone_not_found')
-        gh = catalog_interface.retrieve_greenhouse(zone.get('greenhouse_id'))
-        if not gh or gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
-        items = catalog_interface.retrieve_devices(zone_id)
+        items = catalog_interface.retrieve_devices(zone_id, username)
         # Spec: list of {id, type}
-        return [{"id": it.get("device_id"), "type": it.get("type")} for it in (items or [])]
+        return [{"id": it.get("id"), "type": it.get("type")} for it in (items or [])]
 
     @staticmethod
     def _get_device_status(query, headers):
@@ -173,7 +219,7 @@ class CatalogGetResolver:
         dev = catalog_interface.retrieve_device(device_id)
         if not dev:
             raise cherrypy.HTTPError(status=404, message='device_not_found')
-        if dev.get('type') != 'actuator':
+        if dev.get('type') not in ACTUATOR_TYPES:
             raise cherrypy.HTTPError(status=400, message='not_an_actuator')
         # Convert on/off-like values to boolean
         status = catalog_interface.retrieve_actuator_status(device_id)
@@ -190,12 +236,21 @@ class CatalogGetResolver:
         m_type = query.get('type')
         start = query.get('start')
         end = query.get('end')
+        dev = _require_device(device_id)
+        if dev.get("type") != "raspberry":
+            raise cherrypy.HTTPError(status=400, message="not_a_raspberry")
+        if m_type not in MEASUREMENT_TYPES:
+            raise cherrypy.HTTPError(status=400, message="invalid_measurement_type")
+        _validate_time_range(start, end)
         return catalog_interface.retrieve_measurements(device_id, m_type, start, end)
 
     @staticmethod
     def _last_measures(query, headers):
         validate_authentication(headers, query)
         device_id = query.get('device_id')
+        dev = _require_device(device_id)
+        if dev.get("type") != "raspberry":
+            raise cherrypy.HTTPError(status=400, message="not_a_raspberry")
         return catalog_interface.retrieve_last_measurements(device_id)
 
     @staticmethod
@@ -204,6 +259,10 @@ class CatalogGetResolver:
         device_id = query.get('device_id')
         start = query.get('start')
         end = query.get('end')
+        dev = _require_device(device_id)
+        if dev.get("type") not in ACTUATOR_TYPES:
+            raise cherrypy.HTTPError(status=400, message="not_an_actuator")
+        _validate_time_range(start, end)
         return catalog_interface.retrieve_actuator_consumption(device_id, start, end)
 
 class CatalogPostResolver:
@@ -275,11 +334,9 @@ class CatalogPutResolver:
         username = catalog_interface.retrieve_username_by_token(token)
         gh_id = query.get('id')
         name = query.get('name') or (body or {}).get('name')
-        gh = catalog_interface.retrieve_greenhouse(gh_id)
+        gh = catalog_interface.retrieve_greenhouse(gh_id, username)
         if not gh:
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_found')
-        if gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.rename_greenhouse(gh_id, name, username):
             raise cherrypy.HTTPError(status=409, message='name_taken')
         return None
@@ -291,11 +348,9 @@ class CatalogPutResolver:
         gh_id = query.get('greenhouse_id')
         zone_id = (body or {}).get('zone_id') or query.get('zone_id')
         name = (body or {}).get('name') or query.get('name')
-        gh = catalog_interface.retrieve_greenhouse(gh_id)
+        gh = catalog_interface.retrieve_greenhouse(gh_id, username)
         if not gh:
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_found')
-        if gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.add_zone(gh_id, zone_id, name, username):
             raise cherrypy.HTTPError(status=409, message='zone_conflict')
         return None
@@ -304,7 +359,7 @@ class CatalogPutResolver:
     def _validate_zone(query, body, headers):
         validate_authentication(headers, query)
         zone_id = query.get('zone_id') or (body or {}).get('zone_id')
-        return bool(catalog_interface.retrieve_zone(zone_id))
+        return catalog_interface.check_zone_validity(zone_id)
 
     @staticmethod
     def _rename_zone(query, body, headers):
@@ -312,12 +367,9 @@ class CatalogPutResolver:
         username = catalog_interface.retrieve_username_by_token(token)
         zone_id = query.get('zone_id')
         name = (body or {}).get('name') or query.get('name')
-        zone = catalog_interface.retrieve_zone(zone_id)
+        zone = catalog_interface.retrieve_zone(zone_id, username)
         if not zone:
             raise cherrypy.HTTPError(status=404, message='zone_not_found')
-        gh = catalog_interface.retrieve_greenhouse(zone.get('greenhouse_id'))
-        if not gh or gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.rename_zone(zone_id, name, username):
             raise cherrypy.HTTPError(status=409, message='name_taken')
         return None
@@ -327,12 +379,9 @@ class CatalogPutResolver:
         token = validate_authentication(headers, query)
         username = catalog_interface.retrieve_username_by_token(token)
         zone_id = query.get('zone_id')
-        zone = catalog_interface.retrieve_zone(zone_id)
+        zone = catalog_interface.retrieve_zone(zone_id, username)
         if not zone:
             raise cherrypy.HTTPError(status=404, message='zone_not_found')
-        gh = catalog_interface.retrieve_greenhouse(zone.get('greenhouse_id'))
-        if not gh or gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.delete_zone(zone_id, username):
             raise cherrypy.HTTPError(status=400, message='delete_failed')
         return None
@@ -343,12 +392,9 @@ class CatalogPutResolver:
         username = catalog_interface.retrieve_username_by_token(token)
         zone_id = query.get('zone_id')
         thresholds = _normalize_strategy_payload(body or {})
-        zone = catalog_interface.retrieve_zone(zone_id)
+        zone = catalog_interface.retrieve_zone(zone_id, username)
         if not zone:
             raise cherrypy.HTTPError(status=404, message='zone_not_found')
-        gh = catalog_interface.retrieve_greenhouse(zone.get('greenhouse_id'))
-        if not gh or gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.modify_control_strategy(zone_id, thresholds, username):
             raise cherrypy.HTTPError(status=400, message='modify_failed')
         return None
@@ -366,11 +412,9 @@ class CatalogDeleteResolver:
         token = validate_authentication(headers, query)
         username = catalog_interface.retrieve_username_by_token(token)
         gh_id = query.get('id')
-        gh = catalog_interface.retrieve_greenhouse(gh_id)
+        gh = catalog_interface.retrieve_greenhouse(gh_id, username)
         if not gh:
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_found')
-        if gh.get('owner') != username:
-            raise cherrypy.HTTPError(status=403, message='forbidden')
         if not catalog_interface.delete_greenhouse(gh_id, username):
             raise cherrypy.HTTPError(status=400, message='delete_failed')
         return None

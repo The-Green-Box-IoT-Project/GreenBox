@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8080
 
-CMD ["python", "-m", "catalog.catalog_main"]
+CMD ["python", "catalog_main.py"]

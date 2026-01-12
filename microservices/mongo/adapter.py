@@ -69,6 +69,22 @@ class MongoDBAdapter:
             u["greenhouses"] = []
         return u
 
+    def create_user(self, username: str, password: str, email: str) -> None:
+        if self._users.find_one({"username": username}):
+            raise Conflict("username_taken")
+        self._users.insert_one({
+            "username": username,
+            "password": password,
+            "email": email,
+            "greenhouses": [],
+        })
+
+    def verify_user(self, username: str, password: str) -> bool:
+        u = self._users.find_one({"username": username})
+        if not u:
+            return False
+        return u.get("password") == password
+
     def _user_greenhouse_ids(self, username: str) -> List[str]:
         return list(self._get_user(username).get("greenhouses", []))
 
@@ -420,6 +436,16 @@ class MongoDBAdapter:
             if d:
                 out.append({"id": d["device_id"], "type": d.get("type", "")})
         return out
+
+    def retrieve_device(self, device_id: str) -> Dict[str, Any]:
+        d = self._devices.find_one({"device_id": device_id}, {"_id": 0})
+        if not d:
+            raise NotFound("device_not_found")
+        return d
+
+    def retrieve_device_status(self, device_id: str) -> Any:
+        d = self.retrieve_device(device_id)
+        return d.get("status")
 
     # -------------------------
     # Statistics

@@ -8,8 +8,8 @@ services:
     ports:
       - "8484:8080"
     environment:
-      MONGO_ADAPTER_URL: "http://mongo-adapter:8082"
-      INFLUX_ADAPTER_URL: "http://influx-adapter:8186"
+      MONGO_ADAPTER_URL: "http://host.docker.internal:8182"
+      INFLUX_ADAPTER_URL: "http://host.docker.internal:8186"
       CATALOG_PORT: 8080
       CATALOG_IP: "0.0.0.0"
       CATALOG_HOST: "0.0.0.0"

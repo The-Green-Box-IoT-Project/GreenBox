@@ -3,7 +3,7 @@ import os
 import requests
 import uuid
 from pathlib import Path
-from .auth_token import Token
+from auth_token import Token
 
 P = Path(__file__).parent.absolute()
 CONFIG_FILE = P / 'config.json'
@@ -53,50 +53,54 @@ def retrieve_username_by_token(token_http):
 
 # --- Greenhouses ---
 def retrieve_greenhouses(username):
-    url = f"{MONGO_ADAPTER_URL}/greenhouses"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/greenhouses"
     try:
-        response = requests.get(url, params={"username": username})
-        if response.status_code == 200:
-            return response.json().get("items", [])
-        return []
+        response = requests.get(url)
+        if response.status_code != 200:
+            return []
+        greenhouse_ids = response.json() if isinstance(response.json(), list) else []
+        items = []
+        for gh_id in greenhouse_ids:
+            gh = retrieve_greenhouse(gh_id, username)
+            if gh:
+                items.append({"greenhouse_id": gh_id, "name": gh.get("name")})
+        return items
     except requests.RequestException:
         return []
 
 def add_greenhouse(name, username):
-    url = f"{MONGO_ADAPTER_URL}/greenhouses"
-    greenhouse_id = str(uuid.uuid4())
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/greenhouses"
     try:
-        response = requests.post(url, json={
-            "greenhouse_id": greenhouse_id,
-            "name": name, 
-            "owner": username
-        })
+        response = requests.post(url, json={"name": name})
         return response.status_code == 200 or response.status_code == 201
     except requests.RequestException:
         return False
 
-def retrieve_greenhouse(greenhouse_id):
-    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}"
+def retrieve_greenhouse(greenhouse_id, username):
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/greenhouses"
     try:
-        response = requests.get(url)
+        response = requests.get(url, params={"id": greenhouse_id})
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            data["greenhouse_id"] = greenhouse_id
+            data["owner"] = username
+            return data
         return None
     except requests.RequestException:
         return None
 
 def rename_greenhouse(greenhouse_id, name, username):
-    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/greenhouses"
     try:
-        response = requests.put(url, params={"username": username}, json={"name": name})
+        response = requests.put(url, params={"id": greenhouse_id}, json={"name": name})
         return response.status_code == 200
     except requests.RequestException:
         return False
 
 def delete_greenhouse(greenhouse_id, username):
-    url = f"{MONGO_ADAPTER_URL}/greenhouses/{greenhouse_id}"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/greenhouses"
     try:
-        response = requests.delete(url, params={"username": username})
+        response = requests.delete(url, params={"id": greenhouse_id})
         return response.status_code == 200
     except requests.RequestException:
         return False
@@ -122,66 +126,74 @@ def retrieve_greenhouse_effects(greenhouse_id):
         return []
 
 # --- Zones ---
-def retrieve_zones(greenhouse_id):
-    url = f"{MONGO_ADAPTER_URL}/zones"
+def retrieve_zones(greenhouse_id, username):
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/zones"
     try:
         response = requests.get(url, params={"greenhouse_id": greenhouse_id})
         if response.status_code == 200:
-            return response.json().get("items", [])
+            return response.json()
         return []
     except requests.RequestException:
         return []
 
-def retrieve_zone(zone_id):
-    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}"
+def retrieve_zone(zone_id, username):
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/zones"
     try:
-        response = requests.get(url)
+        response = requests.get(url, params={"id": zone_id})
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            data["zone_id"] = zone_id
+            return data
         return None
     except requests.RequestException:
         return None
+
+def check_zone_validity(zone_id):
+    url = f"{MONGO_ADAPTER_URL}/zones/validate"
+    try:
+        response = requests.get(url, params={"zone_id": zone_id})
+        if response.status_code == 200:
+            return bool(response.json().get("valid"))
+        return False
+    except requests.RequestException:
+        return False
 
 def add_zone(greenhouse_id, zone_id, zone_name, username):
-    url = f"{MONGO_ADAPTER_URL}/zones"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/zones/associate"
     try:
-        response = requests.put(
-            url,
-            params={"username": username},
-            json={"greenhouse_id": greenhouse_id, "zone_id": zone_id, "name": zone_name},
-        )
+        response = requests.put(url, json={"greenhouse_id": greenhouse_id, "zone_id": zone_id, "name": zone_name})
         return response.status_code == 200
     except requests.RequestException:
         return False
 
 def rename_zone(zone_id, zone_name, username):
-    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/zones"
     try:
-        response = requests.put(url, params={"username": username}, json={"name": zone_name})
+        response = requests.put(url, params={"id": zone_id}, json={"name": zone_name})
         return response.status_code == 200
     except requests.RequestException:
         return False
 
 def delete_zone(zone_id, username):
-    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/zones/disassociate"
     try:
-        response = requests.delete(url, params={"username": username})
+        response = requests.put(url, json={"zone_id": zone_id})
         return response.status_code == 200
     except requests.RequestException:
         return False
 
 def modify_control_strategy(zone_id, thresholds, username):
-    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}/strategy"
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/strategy"
     try:
-        response = requests.put(url, params={"username": username}, json=thresholds)
+        response = requests.put(url, params={"id": zone_id}, json=thresholds)
         return response.status_code == 200
     except requests.RequestException:
         return False
 
-def retrieve_control_strategy(zone_id):
-    url = f"{MONGO_ADAPTER_URL}/zones/{zone_id}/strategy"
+def retrieve_control_strategy(zone_id, username):
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/strategy"
     try:
-        response = requests.get(url)
+        response = requests.get(url, params={"id": zone_id})
         if response.status_code == 200:
             return response.json()
         return {}
@@ -189,12 +201,12 @@ def retrieve_control_strategy(zone_id):
         return {}
 
 # --- Devices ---
-def retrieve_devices(zone_id):
-    url = f"{MONGO_ADAPTER_URL}/devices"
+def retrieve_devices(zone_id, username):
+    url = f"{MONGO_ADAPTER_URL}/users/{username}/devices"
     try:
-        response = requests.get(url, params={"zone_id": zone_id})
+        response = requests.get(url, params={"id": zone_id})
         if response.status_code == 200:
-            return response.json().get("items", [])
+            return response.json()
         return []
     except requests.RequestException:
         return []

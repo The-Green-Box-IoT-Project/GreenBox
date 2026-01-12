@@ -1,6 +1,8 @@
 import cherrypy
 import os
-from typing import Optional
+from math import ceil
+from typing import Iterable, Optional
+
 import pandas as pd
 
 from adapter import InfluxDBAdapter
@@ -35,6 +37,32 @@ class InfluxService:
         )
         return self._adapter.query_dataframe(sql, language="sql")
 
+    @staticmethod
+    def _aggregate_dataframe(
+        df: pd.DataFrame,
+        *,
+        value_columns: Iterable[str],
+        limit: int = 60,
+    ) -> pd.DataFrame:
+        if df.empty:
+            return df
+        if len(df) <= limit:
+            return df
+
+        df = df.copy()
+        df["time"] = pd.to_datetime(df["time"], errors="coerce")
+        df = df.dropna(subset=["time"]).sort_values("time")
+        if df.empty:
+            return df
+
+        group_size = ceil(len(df) / limit)
+        df["_bucket"] = [i // group_size for i in range(len(df))]
+        agg_map = {col: "mean" for col in value_columns}
+        out = df.groupby("_bucket", as_index=False).agg(
+            {"time": "first", **agg_map}
+        )
+        return out.drop(columns=["_bucket"])
+
     @cherrypy.tools.json_out()
     def GET(self, *path, **params):
         # Basic liveness endpoint
@@ -66,11 +94,10 @@ class InfluxService:
                     return []
 
                 result = []
+                df = self._aggregate_dataframe(df, value_columns=["value"])
                 if not df.empty:
                     for _, row in df.iterrows():
-                        val = row.get("value")
-                        t = row.get("time")
-                        result.append([str(t), val])
+                        result.append([str(row.get("time")), row.get("value")])
                 return result
 
             elif len(path) == 2 and path[1] == "last":
@@ -100,17 +127,11 @@ class InfluxService:
             # 2. Converti il DataFrame in una lista di dizionari
             result = []
             if not df.empty:
-                # fillna(0) serve perché Influx a volte restituisce NaN se un campo manca in un punto
                 df = df.fillna(0)
-                
+                df = self._aggregate_dataframe(df, value_columns=["level"])
                 for _, row in df.iterrows():
-                    result.append({
-                        "time": str(row["time"]),
-                        "level": float(row.get("level", 0)),
-                        "energy_consumption": float(row.get("energy_consumption", 0)),
-                        "water_consumption": float(row.get("water_consumption", 0))
-                    })
-            
+                    result.append([str(row.get("time")), float(row.get("level", 0))])
+
             return result
 
         raise cherrypy.HTTPError(404)
