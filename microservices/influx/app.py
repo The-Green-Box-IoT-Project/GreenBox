@@ -134,6 +134,25 @@ class InfluxService:
 
             return result
 
+        if path[0] == "actuators" and len(path) == 2 and path[1] == "last":
+            # /actuators/last
+            device_id = params.get("device_id")
+            if not device_id:
+                raise cherrypy.HTTPError(400, "Missing device_id")
+
+            sql = Queries.actuator_last_level(device_id)
+            df = self._adapter.query_dataframe(sql, language="sql")
+            if df.empty:
+                return {}
+
+            row = df.iloc[0]
+            try:
+                level = float(row.get("level", 0))
+            except (TypeError, ValueError):
+                level = row.get("level")
+
+            return {"device_id": device_id, "level": level, "time": str(row.get("time"))}
+
         raise cherrypy.HTTPError(404)
 
 

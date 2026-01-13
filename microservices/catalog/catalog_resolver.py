@@ -221,13 +221,8 @@ class CatalogGetResolver:
             raise cherrypy.HTTPError(status=404, message='device_not_found')
         if dev.get('type') not in ACTUATOR_TYPES:
             raise cherrypy.HTTPError(status=400, message='not_an_actuator')
-        # Convert on/off-like values to boolean
         status = catalog_interface.retrieve_actuator_status(device_id)
-        if isinstance(status, str):
-            status_bool = status.lower() in {'on', 'true', '1', 'online'}
-        else:
-            status_bool = bool(status)
-        return {'device_id': device_id, 'status': status_bool}
+        return {'device_id': device_id, 'status': status}
 
     @staticmethod
     def _measures(query, headers):

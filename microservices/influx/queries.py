@@ -88,3 +88,21 @@ class Queries(object):
         WHERE {where_clause}
         ORDER BY time DESC
         """
+
+    @classmethod
+    def actuator_last_level(cls, device_id):
+        """
+        Recupera l'ultimo livello noto per un attuatore.
+        """
+        conditions = []
+        if device_id:
+            conditions.append(f"id = '{cls._escape(device_id)}'")
+        where_clause = " AND ".join(conditions) if conditions else "1 = 1"
+
+        return f"""
+        SELECT time, level
+        FROM actuator_data
+        WHERE {where_clause}
+        ORDER BY time DESC
+        LIMIT 1
+        """

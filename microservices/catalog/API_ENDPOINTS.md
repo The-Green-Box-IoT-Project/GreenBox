@@ -44,6 +44,7 @@ Auth header (all except register/login): `token: <TOKEN>`
 ## Devices
 - GET `/devices?zone_id=<ZONE_ID>`
 - GET `/devices/status?device_id=<DEVICE_ID>`
+  - Response: `{"device_id":"<DEVICE_ID>","status":<VALUE>}` where `status` is the last actuator level from Influx
 
 ## Measurements (raspberry only)
 - GET `/measurements?device_id=<RB_ID>&type=<TYPE>&start=<S>&end=<E>`

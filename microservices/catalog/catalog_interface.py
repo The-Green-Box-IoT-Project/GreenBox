@@ -212,14 +212,14 @@ def retrieve_devices(zone_id, username):
         return []
 
 def retrieve_actuator_status(device_id):
-    url = f"{MONGO_ADAPTER_URL}/devices/{device_id}/status"
+    url = f"{INFLUX_ADAPTER_URL}/actuators/last"
     try:
-        response = requests.get(url)
+        response = requests.get(url, params={"device_id": device_id})
         if response.status_code == 200:
-            return response.json().get("status")
-        return False
+            return response.json().get("level")
+        return None
     except requests.RequestException:
-        return False
+        return None
 
 def retrieve_device(device_id):
     url = f"{MONGO_ADAPTER_URL}/devices/{device_id}"
