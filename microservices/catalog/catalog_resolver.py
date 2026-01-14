@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 
 import cherrypy
@@ -121,6 +120,8 @@ class CatalogGetResolver:
                 return CatalogGetResolver._retrieve_greenhouses(query, headers)
             case CatalogGetRequest.RETRIEVE_ZONES:
                 return CatalogGetResolver._retrieve_zones(query, headers)
+            case CatalogPutRequest.VALIDATE_ZONE:
+                return CatalogGetResolver._validate_zone(query, headers)
             case CatalogGetRequest.RETRIEVE_CONTROL_STRATEGY:
                 return CatalogGetResolver._retrieve_control_strategy(query, headers)
             case CatalogGetRequest.RETRIEVE_DEVICES:
@@ -185,7 +186,13 @@ class CatalogGetResolver:
         if not gh:
             raise cherrypy.HTTPError(status=404, message='greenhouse_not_found')
         items = catalog_interface.retrieve_zones(gh_id, username)
-        return [{"id": it.get("zone_id"), "name": it.get("name")} for it in (items or [])]
+        return [{"id": it.get("id"), "name": it.get("name")} for it in (items or [])]
+
+    @staticmethod
+    def _validate_zone(query, headers):
+        validate_authentication(headers, query)
+        zone_id = query.get('zone_id')
+        return catalog_interface.check_zone_validity(zone_id)
 
     @staticmethod
     def _retrieve_control_strategy(query, headers):
@@ -313,8 +320,6 @@ class CatalogPutResolver:
                 return CatalogPutResolver._rename_greenhouse(query, body, headers)
             case CatalogPutRequest.ADD_ZONE:
                 return CatalogPutResolver._add_zone(query, body, headers)
-            case CatalogPutRequest.VALIDATE_ZONE:
-                return CatalogPutResolver._validate_zone(query, body, headers)
             case CatalogPutRequest.RENAME_ZONE:
                 return CatalogPutResolver._rename_zone(query, body, headers)
             case CatalogPutRequest.DELETE_ZONE:
@@ -349,12 +354,6 @@ class CatalogPutResolver:
         if not catalog_interface.add_zone(gh_id, zone_id, name, username):
             raise cherrypy.HTTPError(status=409, message='zone_conflict')
         return None
-
-    @staticmethod
-    def _validate_zone(query, body, headers):
-        validate_authentication(headers, query)
-        zone_id = query.get('zone_id') or (body or {}).get('zone_id')
-        return catalog_interface.check_zone_validity(zone_id)
 
     @staticmethod
     def _rename_zone(query, body, headers):

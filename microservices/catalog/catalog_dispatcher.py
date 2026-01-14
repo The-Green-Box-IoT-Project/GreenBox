@@ -50,6 +50,8 @@ class CatalogGetDispatcher:
             return CatalogGetRequest.RETRIEVE_GREENHOUSES
         if CatalogGetDispatcher._is_retrieve_zones_request(path, query):
             return CatalogGetRequest.RETRIEVE_ZONES
+        if CatalogGetDispatcher._is_validate_zone_request(path, query):
+            return CatalogPutRequest.VALIDATE_ZONE
         if CatalogGetDispatcher._is_retrieve_control_strategy_request(path, query):
             return CatalogGetRequest.RETRIEVE_CONTROL_STRATEGY
         if CatalogGetDispatcher._is_retrieve_devices_request(path, query):
@@ -87,6 +89,11 @@ class CatalogGetDispatcher:
     @staticmethod
     def _is_retrieve_zones_request(path, query):
         return len(path) == 1 and path[0] == 'zones' and 'greenhouse_id' in query
+
+    @staticmethod
+    def _is_validate_zone_request(path, query):
+        has_zone_id = 'zone_id' in query
+        return len(path) == 2 and path[0] == 'zones' and path[1] == 'validate' and has_zone_id
 
     @staticmethod
     def _is_retrieve_control_strategy_request(path, query):
@@ -140,8 +147,6 @@ class CatalogPutDispatcher:
     @staticmethod
     def dispatch(path, query, body=None):
         path = tuple(p for p in path if p)
-        if CatalogPutDispatcher._is_validate_zone_request(path, query, body):
-            return CatalogPutRequest.VALIDATE_ZONE
         if CatalogPutDispatcher._is_rename_greenhouse_request(path, query, body):
             return CatalogPutRequest.RENAME_GREENHOUSE
         if CatalogPutDispatcher._is_modify_control_strategy_request(path, query):
@@ -154,11 +159,6 @@ class CatalogPutDispatcher:
         if CatalogPutDispatcher._is_delete_zone_request(path, query, body):
             return CatalogPutRequest.DELETE_ZONE
         return CatalogPutRequest.NOT_FOUND
-
-    @staticmethod
-    def _is_validate_zone_request(path, query, body):
-        has_zone_id = 'zone_id' in query or (body and 'zone_id' in body)
-        return len(path) == 2 and path[0] == 'zones' and path[1] == 'validate' and has_zone_id
 
     @staticmethod
     def _is_rename_greenhouse_request(path, query, body):
