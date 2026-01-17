@@ -19,3 +19,4 @@ backup/*
 venv
 .venv
 *.bat
+/Control_Strategies/crop_profiles.json
