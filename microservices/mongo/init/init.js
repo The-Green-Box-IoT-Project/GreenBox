@@ -56,7 +56,7 @@ db.zones.insertMany([
       temperature: { min: 20, max: 25 },
       light: { enabled: "false", start: 10, end: 15 },
       humidity: { min: 0.4, max: 0.7 },
-      soil_humidity: { min: 0.25, max: 0.45 }
+      soil_humidity: { min: 0.25, max: 1.0 }
     },
     devices: [
       "RB_001",
@@ -74,7 +74,7 @@ db.zones.insertMany([
       temperature: { min: 20, max: 25 },
       light: { enabled: "true", start: 10, end: 15 },
       humidity: { min: 0.4, max: 0.7 },
-      soil_humidity: { min: 0.25, max: 0.45 }
+      soil_humidity: { min: 0.25, max: 1.0 }
     },
     devices: [
       "RB_002",

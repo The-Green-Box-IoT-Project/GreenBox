@@ -4,6 +4,9 @@ import pandas as pd
 import json
 from typing import Any, Dict, Tuple
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
+
+LOCAL_TZ = ZoneInfo("Europe/Rome")
 
 from utils.threshold import Threshold
 from utils.mqtt import MyMQTT
@@ -14,6 +17,7 @@ from utils.client import get_thresholds, get_device_context
 @dataclass
 class ZoneOptimizers:
     """Contenitore per le istanze degli ottimizzatori di una singola zona (gh_id, rb_id)."""
+
     main: Optimizer
     light: LightOptimizer
     light_enabled: bool
@@ -144,31 +148,42 @@ class Controller:
             optimizers = self._get_or_create_optimizers(gh_id, rb_id)
             metrics_payload = data.get("metrics", {})
             zone_key = (gh_id, rb_id)
-            current_actuator_state = self.last_actuator_commands.get(zone_key, {}) # Recupera l'ultimo stato noto
-            
+            current_actuator_state = self.last_actuator_commands.get(
+                zone_key, {}
+            )  # Recupera l'ultimo stato noto
+
             # --- Gestione Ottimizzatore Principale ---
-            res_main = optimizers.main.decide(metrics_payload, current_actuator_state=current_actuator_state)
-            if res_main and res_main.get("mode") != "hold":
-                actions = res_main.get("actions", {})
-                
+            res_main = optimizers.main.decide(
+                metrics_payload, current_actuator_state=current_actuator_state
+            )
+
+            if res_main:
+                # Se tutto è in range, spegni tutto (level=0)
+                if res_main.get("mode") == "hold":
+                    actions = {sys: 0 for sys in optimizers.main.actuators}
+                else:
+                    actions = res_main.get("actions", {})
+
                 if self.last_actuator_commands.get(zone_key) != actions:
                     self.last_actuator_commands[zone_key] = actions
+                    print(
+                        f"[{self.clientID}] Zone {gh_id}/{rb_id} actions -> {actions}"
+                    )
                     for sys, lvl in actions.items():
                         if sys == "illumination_system":
                             continue
-                            
+
                         cmd_topic = f"/{gh_id}/{rb_id}/actuators/{sys}/cmd"
-                        msg = {
-                            "cmd": "ON" if lvl > 0 else "OFF",
-                            "level": lvl,
-                        }
+                        msg = {"cmd": "ON" if lvl > 0 else "OFF", "level": lvl}
                         self.mqtt.MyPublish(cmd_topic, msg)
                 else:
-                    print(f"DEBUG: [{self.clientID}] Zone {gh_id}/{rb_id} - Main optimizer actions unchanged.")
+                    print(
+                        f"DEBUG: [{self.clientID}] Zone {gh_id}/{rb_id} - Main optimizer actions unchanged."
+                    )
 
             # --- Gestione Ottimizzatore Luce ---
             if optimizers.light_enabled:
-                current_hour = datetime.datetime.now().hour
+                current_hour = datetime.datetime.now(LOCAL_TZ).hour
                 if (
                     optimizers.light_start_hour
                     <= current_hour
@@ -185,9 +200,7 @@ class Controller:
                                 float(light_data["median"])
                             )
                             if res_light:
-                                cmd_topic = (
-                                    f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
-                                )
+                                cmd_topic = f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
                                 self.mqtt.MyPublish(cmd_topic, res_light)
                         except (ValueError, TypeError):
                             print(

@@ -4,7 +4,6 @@ import logging
 import threading
 from typing import Dict
 from pprint import pformat
-from datetime import datetime, timezone
 
 from devices.utils.mqtt import MyMQTT
 from devices.utils.client import get_effects_config
@@ -18,7 +17,15 @@ class Actuator:
     which is configured by the script that launches it.
     """
 
-    def __init__(self, device_id: str, system: str, gh_id: str, rb_id: str, broker_ip: str, broker_port: int):
+    def __init__(
+        self,
+        device_id: str,
+        system: str,
+        gh_id: str,
+        rb_id: str,
+        broker_ip: str,
+        broker_port: int,
+    ):
         self.device_id = device_id
         self.system = system
         self.gh_id = gh_id
@@ -28,8 +35,12 @@ class Actuator:
         effects_df = get_effects_config()
         actuator_effects_df = effects_df[effects_df["system"] == self.system].copy()
         if actuator_effects_df.empty:
-            logging.warning("[%s] No effects configuration found for system '%s'. This actuator will have no simulated effect.", self.device_id, self.system)
-        
+            logging.warning(
+                "[%s] No effects configuration found for system '%s'. This actuator will have no simulated effect.",
+                self.device_id,
+                self.system,
+            )
+
         self.levels = sorted(actuator_effects_df["level"].astype(str).tolist())
         self.by_level: Dict[str, Dict[str, float]] = {
             str(r["level"]): r.drop(labels=["system", "level"]).dropna().to_dict()
@@ -38,7 +49,9 @@ class Actuator:
 
         # Build zone-specific topics
         self.CMD_TOPIC = f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/cmd"
-        self.DATA_TOPIC = f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/{self.device_id}/data"
+        self.DATA_TOPIC = (
+            f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/{self.device_id}/data"
+        )
 
         # MQTT wrapper
         self.mqtt = MyMQTT(
@@ -57,7 +70,7 @@ class Actuator:
         self._pub_thread = None
         self._lock = threading.Lock()
 
-    def apply(self, level: int, elapsed_time: float) -> Dict[str, float]: # Modified signature
+    def apply(self, level: int, elapsed_time: float) -> Dict[str, float]:
         """Calculates the simulated cumulative effect of the actuator since it was turned on."""
         key = f"{level}%"
         eff = self.by_level.get(key, self.by_level.get(str(level), {}))
@@ -67,9 +80,9 @@ class Actuator:
                 out[k] = v
             elif k == "light":
                 # For light, the effect is a constant output, not cumulative over time.
-                out[f"delta_{k}"] = v # Not multiplied by elapsed_time
+                out[f"delta_{k}"] = v  # Not multiplied by elapsed_time
             else:
-                out[f"delta_{k}"] = v * elapsed_time # Multiplied by elapsed_time
+                out[f"delta_{k}"] = v * elapsed_time  # Multiplied by elapsed_time
         return out
 
     def set_level(self, level: int):
@@ -80,6 +93,16 @@ class Actuator:
         self.mqtt.start()
         self.mqtt.MySubscribe(self.CMD_TOPIC)
         logging.info(f"[{self.device_id}] Listening on {self.CMD_TOPIC}")
+        # Start publisher thread immediately (publish even at level=0)
+        with self._lock:
+            if self._pub_thread is None or not self._pub_thread.is_alive():
+                self._stop_event.clear()
+                self._pub_thread = threading.Thread(
+                    target=self._publisher_loop,
+                    name=f"{self.device_id}-pub",
+                    daemon=True,
+                )
+                self._pub_thread.start()
 
     def stop(self):
         """Gracefully stop the actuator."""
@@ -91,7 +114,6 @@ class Actuator:
             pass
         self.mqtt.stop()
         logging.info(f"[{self.device_id}] Stopped.")
-
 
     def notify(self, topic, payload):
         """Handle received MQTT command messages."""
@@ -114,7 +136,9 @@ class Actuator:
                     try:
                         level = int(float(level))
                     except (TypeError, ValueError):
-                        logging.warning(f"[{self.device_id}] Invalid 'level': {level!r}")
+                        logging.warning(
+                            f"[{self.device_id}] Invalid 'level': {level!r}"
+                        )
                         return
                 self._turn_on(level)
             elif cmd == "OFF":
@@ -128,7 +152,6 @@ class Actuator:
             logging.error(f"[{self.device_id}] Error in notify: {e}", exc_info=True)
 
     def _turn_on(self, level: int = None):
-        """Turn on actuator and start publisher thread."""
         with self._lock:
             if level is not None:
                 prev = self.level
@@ -142,45 +165,27 @@ class Actuator:
 
             self._is_on = True
             self._on_epoch = time.time()
-            self._stop_event.clear()
-            self._pub_thread = threading.Thread(
-                target=self._publisher_loop, name=f"{self.device_id}-pub", daemon=True
-            )
-            self._pub_thread.start()
             logging.info(f"[{self.device_id}] State: ON (level={self.level}%).")
 
     def turn_off(self):
-        """Turn off actuator and stop publishing thread."""
         with self._lock:
-            if not self._is_on:
-                self.set_level(0)
-                return
             self._is_on = False
-            self._stop_event.set()
-        if self._pub_thread and self._pub_thread.is_alive():
-            self._pub_thread.join(timeout=2.0)
-        self._pub_thread = None
-        with self._lock:
             self._on_epoch = None
             self.set_level(0)
-        logging.info(f"[{self.device_id}] State: OFF. Publishing stopped.")
+        logging.info(f"[{self.device_id}] State: OFF.")
 
     def _publisher_loop(self):
         """Periodic data publishing loop."""
-        # next_ts = time.time() # No longer needed for elapsed calculation
-        # last_ts = next_ts # No longer needed for elapsed calculation
         while not self._stop_event.is_set():
             now = time.time()
-            # dt = now - last_ts # No longer needed
-            # last_ts = now # No longer needed
             with self._lock:
-                elapsed = int(now - self._on_epoch) if self._on_epoch else 0
+                elapsed = (
+                    int(now - self._on_epoch) if (self._is_on and self._on_epoch) else 0
+                )
                 lvl = self.level
-            effects = self.apply(lvl, float(elapsed)) # Pass elapsed as float
-            ts_iso = datetime.now(timezone.utc).isoformat()
+            effects = self.apply(lvl, float(elapsed))  # Pass elapsed as float
             payload = {
                 "id": self.device_id,
-                "timestamp": ts_iso,
                 "seconds_since_on": elapsed,
                 "system": self.system,
                 "level": lvl,
@@ -193,9 +198,7 @@ class Actuator:
             except Exception as e:
                 logging.warning(f"[{self.device_id}] Publish error: {e}")
 
-            # next_ts += self.publish_period_s # No longer needed if using sleep
-            # delay = max(0.0, next_ts - time.time()) # No longer needed
-            if self._stop_event.wait(timeout=self.publish_period_s): # Simplified sleep
+            if self._stop_event.wait(timeout=self.publish_period_s):
                 break
 
     def __str__(self):

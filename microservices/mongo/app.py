@@ -2,6 +2,7 @@
 import cherrypy
 from adapter import MongoDBAdapter, NotFound, Forbidden, Conflict
 
+
 def handle_adapter_errors(func):
     def wrapper(*args, **kwargs):
         try:
@@ -15,7 +16,9 @@ def handle_adapter_errors(func):
         except KeyError as e:
             # Cattura errori di chiavi mancanti nel JSON body
             raise cherrypy.HTTPError(400, f"Missing parameter: {str(e)}")
+
     return wrapper
+
 
 class MongoService:
     exposed = True
@@ -32,7 +35,7 @@ class MongoService:
         # Recupera 'id' dai query params (kwargs)
         id_param = kwargs.get("id")
         greenhouse_id = kwargs.get("greenhouse_id")
-        
+
         resource = args[0] if len(args) > 0 else None
         action = args[1] if len(args) > 1 else None
 
@@ -53,7 +56,7 @@ class MongoService:
 
         if resource == "devices" and id_param and action is None:
             return self.db.retrieve_devices(username, id_param)
-        
+
         # NOTA: Ho rimosso "lookup" da qui perché MongoService richiede {username} nell'URL.
         # La logica è stata spostata in StrategyService.
 
@@ -87,7 +90,10 @@ class MongoService:
         if not username:
             raise cherrypy.HTTPError(404)
         # 1. Log di Debug
-        print(f"DEBUG PUT -> Username: {username} | Args: {args} | Kwargs: {kwargs}", flush=True)
+        print(
+            f"DEBUG PUT -> Username: {username} | Args: {args} | Kwargs: {kwargs}",
+            flush=True,
+        )
 
         body = cherrypy.request.json
         id_param = kwargs.get("id")
@@ -98,8 +104,10 @@ class MongoService:
         if resource == "zones" and action == "associate":
             if not all(k in body for k in ("greenhouse_id", "zone_id", "name")):
                 raise cherrypy.HTTPError(400, "Missing required fields in body")
-            
-            self.db.associate_zone(username, body["greenhouse_id"], body["zone_id"], body["name"])
+
+            self.db.associate_zone(
+                username, body["greenhouse_id"], body["zone_id"], body["name"]
+            )
             return ""
 
         if resource == "zones" and action == "disassociate":
@@ -136,7 +144,7 @@ class MongoService:
             return ""
 
         raise cherrypy.HTTPError(404)
-    
+
 
 class LoginService:
     exposed = True
@@ -226,7 +234,9 @@ class StrategyService:
             dev_id = kwargs.get("device_id")
 
             if not gh_id or not dev_id:
-                raise cherrypy.HTTPError(400, "Missing greenhouse_id or device_id params")
+                raise cherrypy.HTTPError(
+                    400, "Missing greenhouse_id or device_id params"
+                )
 
             # Chiama il metodo dell'adapter
             result = self.db.get_info_from_device(gh_id, dev_id)
@@ -240,47 +250,49 @@ class StrategyService:
 
 
 if __name__ == "__main__":
-    cherrypy.config.update({
-        "server.socket_host": "0.0.0.0",
-        "server.socket_port": 8082,
-        "tools.response_headers.on": True,
-        "tools.response_headers.headers": [("Content-Type", "application/json")],
-    })
+    cherrypy.config.update(
+        {
+            "server.socket_host": "0.0.0.0",
+            "server.socket_port": 8082,
+            "tools.response_headers.on": True,
+            "tools.response_headers.headers": [("Content-Type", "application/json")],
+        }
+    )
 
     cherrypy.tree.mount(
         MongoService(),
         "/users",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
 
     cherrypy.tree.mount(
         ZoneLookupService(),
         "/zones",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
 
     cherrypy.tree.mount(
         DeviceService(),
         "/devices",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
 
     cherrypy.tree.mount(
         StatisticsService(),
         "/statistics",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
 
-    # Ora la classe StrategyService esiste ed è definita sopra
     cherrypy.tree.mount(
         StrategyService(),
         "/strategies",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
+
     cherrypy.tree.mount(
         LoginService(),
         "/login",
-        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}}
+        {"/": {"request.dispatch": cherrypy.dispatch.MethodDispatcher()}},
     )
 
     cherrypy.engine.start()

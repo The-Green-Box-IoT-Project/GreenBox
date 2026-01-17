@@ -128,9 +128,6 @@ class SensorSim(Sensor):
 
         # Subscribe to all actuators' data for THIS specific zone (greenhouse/raspberry)
         self._actuator_topic = f"/{self.site_id}/{self.raspberry_id}/actuators/+/+/data"
-        # self._actuator_topic = (
-        #     self.base_topic.replace(f"/+/sensors/", "/actuators/") + "+/+/data"
-        # )
 
     def notify(self, topic, payload):
         """

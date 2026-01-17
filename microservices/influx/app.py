@@ -2,11 +2,49 @@ import cherrypy
 import os
 from math import ceil
 from typing import Iterable, Optional
-
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import pandas as pd
 
 from adapter import InfluxDBAdapter
 from queries import Queries
+
+DEFAULT_TZ = ZoneInfo("Europe/Rome")
+
+
+def _normalize_time_param(s: Optional[str]) -> Optional[str]:
+    """
+    Converte start_time/end_time in una stringa RFC3339 UTC.
+    - Se s è naive (senza tz), assume Europe/Rome.
+    - Se s ha Z o offset, lo rispetta.
+    Ritorna stringa tipo: '2026-01-16T15:00:00Z'
+    """
+    if not s:
+        return None
+
+    # Supporta 'Z' (RFC3339) convertendolo in formato compatibile con fromisoformat
+    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+    # Se manca timezone -> assumo Europe/Rome
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=DEFAULT_TZ)
+
+    # Normalizzo a UTC
+    dt_utc = dt.astimezone(timezone.utc)
+
+    # Tolgo microsecondi per avere stringhe pulite e stabili
+    dt_utc = dt_utc.replace(microsecond=0)
+
+    # Ritorno con 'Z'
+    return dt_utc.isoformat().replace("+00:00", "Z")
+
+
+def _to_local_iso(s: str) -> str:
+    # s arriva spesso come '2026-01-16 15:23:36+00:00' o simile
+    dt = pd.to_datetime(s, utc=True, errors="coerce")
+    if pd.isna(dt):
+        return str(s)
+    return dt.tz_convert("Europe/Rome").isoformat()
 
 
 class InfluxService:
@@ -58,9 +96,7 @@ class InfluxService:
         group_size = ceil(len(df) / limit)
         df["_bucket"] = [i // group_size for i in range(len(df))]
         agg_map = {col: "mean" for col in value_columns}
-        out = df.groupby("_bucket", as_index=False).agg(
-            {"time": "first", **agg_map}
-        )
+        out = df.groupby("_bucket", as_index=False).agg({"time": "first", **agg_map})
         return out.drop(columns=["_bucket"])
 
     @cherrypy.tools.json_out()
@@ -77,8 +113,8 @@ class InfluxService:
                 # /measurements
                 device_id = params.get("device_id")
                 metric = params.get("measurement_type")
-                start = params.get("start_time")
-                end = params.get("end_time")
+                start = _normalize_time_param(params.get("start_time"))
+                end = _normalize_time_param(params.get("end_time"))
 
                 if not metric:
                     raise cherrypy.HTTPError(400, "Missing measurement_type")
@@ -97,7 +133,9 @@ class InfluxService:
                 df = self._aggregate_dataframe(df, value_columns=["value"])
                 if not df.empty:
                     for _, row in df.iterrows():
-                        result.append([str(row.get("time")), row.get("value")])
+                        result.append(
+                            [_to_local_iso(str(row.get("time"))), row.get("value")]
+                        )
                 return result
 
             elif len(path) == 2 and path[1] == "last":
@@ -117,8 +155,9 @@ class InfluxService:
         if path[0] == "consumption":
             # / consumption
             device_id = params.get("device_id")
-            start = params.get("start_time")
-            end = params.get("end_time")
+
+            start = _normalize_time_param(params.get("start_time"))
+            end = _normalize_time_param(params.get("end_time"))
 
             # 1. Usa la nuova query dettagliata
             sql = Queries.actuator_detailed(device_id, start, end)
@@ -130,8 +169,9 @@ class InfluxService:
                 df = df.fillna(0)
                 df = self._aggregate_dataframe(df, value_columns=["level"])
                 for _, row in df.iterrows():
-                    result.append([str(row.get("time")), float(row.get("level", 0))])
-
+                    result.append(
+                        [_to_local_iso(str(row.get("time"))), row.get("level")]
+                    )
             return result
 
         if path[0] == "actuators" and len(path) == 2 and path[1] == "last":
@@ -151,7 +191,11 @@ class InfluxService:
             except (TypeError, ValueError):
                 level = row.get("level")
 
-            return {"device_id": device_id, "level": level, "time": str(row.get("time"))}
+            return {
+                "device_id": device_id,
+                "level": level,
+                "time": str(row.get("time")),
+            }
 
         raise cherrypy.HTTPError(404)
 

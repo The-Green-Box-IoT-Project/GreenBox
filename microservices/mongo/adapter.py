@@ -499,4 +499,7 @@ class MongoDBAdapter:
         if not z:
             return []
         strategy = z.get("strategy") or {}
-        return list(strategy.keys())
+        measurements = list(strategy.keys())
+        if "pH" not in measurements:
+            measurements.append("pH")
+        return measurements

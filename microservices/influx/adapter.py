@@ -1,4 +1,8 @@
 from typing import Optional, Any, Dict
+import json
+import time
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from influxdb_client_3 import InfluxDBClient3
 import pandas as pd
@@ -23,9 +27,7 @@ class InfluxDBAdapter:
         self._host = raw_host.rstrip("/")
 
         self._database = (
-            os.getenv("INFLUXDB_DATABASE")
-            or os.getenv("INFLUXDB_BUCKET")
-            or "greenbox"
+            os.getenv("INFLUXDB_DATABASE") or os.getenv("INFLUXDB_BUCKET") or "greenbox"
         )
         self._token = os.getenv("INFLUXDB_TOKEN")
         self._org = os.getenv("INFLUXDB_ORG")
@@ -33,32 +35,61 @@ class InfluxDBAdapter:
 
         self._client: Optional[InfluxDBClient3] = None
 
+    def _create_db_if_missing(self) -> None:
+        """
+        Crea il database su InfluxDB 3 Core tramite endpoint di configurazione.
+        Idempotente: se esiste già, non rompe il flusso.
+        """
+        url = f"{self._host}/api/v3/configure/database"
+        payload = json.dumps({"db": self._database}).encode("utf-8")
+
+        req = Request(
+            url=url,
+            data=payload,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+
+        # piccolo retry perché docker-compose "depends_on" NON aspetta readiness
+        deadline = time.time() + 30  # 30s di tentativi
+        last_err = None
+
+        while time.time() < deadline:
+            try:
+                with urlopen(req, timeout=self._timeout) as resp:
+                    # 201 Created oppure 204/200 a seconda delle versioni
+                    if resp.status in (200, 201, 204):
+                        return
+            except HTTPError as e:
+                # se "already exists" o simile, consideriamolo OK
+                if e.code in (409,):
+                    return
+                last_err = e
+            except URLError as e:
+                last_err = e
+
+            time.sleep(1)
+
+        # se arrivi qui, non sei riuscito a creare/contattare Influx
+        raise RuntimeError(
+            f"Impossibile creare/verificare il DB '{self._database}': {last_err}"
+        )
+
     def connect(self) -> None:
-        """
-        Create the underlying InfluxDBClient3 instance if not already created.
-        """
         if self._client is not None:
             return
 
-        kwargs: Dict[str, Any] = {
-            "host": self._host,
-            "database": self._database
-        }
+        # 1) crea/assicura DB
+        self._create_db_if_missing()
 
-        # Token/org are optional for local Core started with --without-auth.
+        # 2) ora puoi creare il client "con database"
+        kwargs: Dict[str, Any] = {"host": self._host, "database": self._database}
         if self._token:
             kwargs["token"] = self._token
         if self._org:
             kwargs["org"] = self._org
 
         self._client = InfluxDBClient3(**kwargs)
-
-        try:
-            # Attempt to create the database on connect.
-            # If it already exists, this might raise an exception which we ignore.
-            self._client.query(f'CREATE DATABASE "{self._database}"', language="sql")
-        except Exception:
-            pass
 
     def close(self) -> None:
         if self._client is not None:

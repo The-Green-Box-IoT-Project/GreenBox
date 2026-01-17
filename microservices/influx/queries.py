@@ -11,6 +11,7 @@ class Queries(object):
         "humidity",
         "light",
         "soil_humidity",
+        "pH",
     }
 
     @staticmethod

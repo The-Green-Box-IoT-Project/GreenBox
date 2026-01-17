@@ -21,6 +21,12 @@
           "pin": 3,
           "measurements": ["soil_humidity"],
           "units": { "soil_humidity": "%" }
+        },
+        {
+          "id": "phph_001",
+          "pin": 4,
+          "measurements": ["pH"],
+          "units": { "ph": "-" }
         }
       ]
     },
@@ -45,6 +51,12 @@
           "pin": 3,
           "measurements": ["soil_humidity"],
           "units": { "soil_humidity": "%" }
+        },
+        {
+          "id": "phph_002",
+          "pin": 4,
+          "measurements": ["pH"],
+          "units": { "ph": "-" }
         }
       ]
     }

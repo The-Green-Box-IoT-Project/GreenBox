@@ -5,8 +5,14 @@ import pandas as pd
 
 from utils.threshold import Threshold
 
+DEADBAND = {
+    "temperature": 0.3,  # °C
+    "humidity": 0.03,  # frazione (0..1)
+    "soil_humidity": 0.02,  # frazione (0..1)
+}
 
-class Optimizer: 
+
+class Optimizer:
     """
     Multi-objective optimizer (excludes pH and Light):
       - Derives per-metric net derivatives from actuator effects.
@@ -56,21 +62,27 @@ class Optimizer:
         per_metric_payloads: Dict[str, Dict[str, Any]],
         *,
         horizon_cap_s: Optional[float] = None,
-        current_actuator_state: Dict[str, Any] # Aggiunto current_actuator_state
+        current_actuator_state: Dict[str, Any],  # Aggiunto current_actuator_state
     ) -> Dict[str, Any]:
         """
         Returns: {"mode","actions","duration_s","post_metrics","violation"}.
         """
         cur = self._current_from_payloads(per_metric_payloads)
 
-        # HOLD if everything is already within band
+        # HOLD only if safely inside band by a deadband margin
+        def _in_band_db(m: str, x: float) -> bool:
+            th = self.thresholds[m]
+            lo, hi = th.band()
+            db = float(DEADBAND.get(m, 0.0))
+            return (x >= lo + db) and (x <= hi - db)
+
         if all(
-            self.thresholds[m].in_band(cur.get(m, self.thresholds[m].center))
+            _in_band_db(m, float(cur.get(m, self.thresholds[m].center)))
             for m in self.metrics
         ):
             return {
                 "mode": "hold",
-                "actions": current_actuator_state, # In modalità hold, mantiene lo stato attuale
+                "actions": current_actuator_state,
                 "post_metrics": dict(cur),
                 "violation": self._violation_sum(cur),
             }
@@ -239,17 +251,18 @@ class LightOptimizer:
     Event-driven, standalone light optimizer.
     - Reads 'light' band from Threshold.
     - Uses Effects("illumination_system") to get levels and light effects.
-    - Decision logic:
-        ambient ≈ median_natural - effect[current_level]
-        OFF if ambient >= lo
-        otherwise ON at minimal level such that ambient + effect[level] >= lo
+    - Decision logic (with hysteresis):
+        OFF if ambient >= lo + deadband
+        ON  if ambient <  lo - deadband, at minimal level such that ambient + effect[level] >= lo
+        Otherwise keep last command.
     - Publishes only on decision change (returns None otherwise).
     """
 
     def __init__(
         self, thresholds_config: Dict[str, Threshold], effects_config_df: pd.DataFrame
     ) -> None:
-        light_threshold = None
+        # Find threshold for light
+        light_threshold: Optional[Threshold] = None
         for key, value in thresholds_config.items():
             if key.lower() == "light":
                 light_threshold = value
@@ -258,42 +271,52 @@ class LightOptimizer:
             raise ValueError("Fatal: 'light' threshold configuration not found.")
 
         self.lo, self.hi = light_threshold.band()
+        self.deadband = 30.0  # lux (hysteresis around lo)
 
         # Filter effects for illumination_system
         sys_df = effects_config_df[effects_config_df["system"] == "illumination_system"]
-        self.levels = sorted(int(s.rstrip("%")) for s in sys_df["level"].unique())
+        self.levels = sorted(int(str(s).rstrip("%")) for s in sys_df["level"].unique())
 
+        # Map level -> light effect (lux contribution)
         self.effect: Dict[int, float] = {}
         for _, r in sys_df.iterrows():
-            level_key = int(r["level"].rstrip("%"))
-            self.effect[level_key] = float(r.get("light", 0.0))
+            level_key = int(str(r["level"]).rstrip("%"))
+            self.effect[level_key] = float(r.get("light", 0.0) or 0.0)
 
+        # Track last decision to avoid republishing duplicates
         self.last_cmd: Optional[str] = None
-        self.last_level: Optional[int] = (
-            None  # stores the last commanded level (0..100)
-        )
+        self.last_level: Optional[int] = None  # 0..100
 
     def decide(self, median_lux: float) -> Optional[Dict[str, object]]:
-        lo = self.lo
-        curr_level = 0 if self.last_level is None else int(self.last_level)
-        ambient = float(median_lux) - float(self.effect.get(curr_level, 0.0))
+        lo = float(self.lo)
+        ambient = float(median_lux)
 
-        if ambient >= lo:
+        # hysteresis on the ON/OFF threshold
+        if ambient >= lo + self.deadband:
             cmd = {"cmd": "OFF", "level": 0}
-        else:
+
+        elif ambient < lo - self.deadband:
+            # choose minimal level that reaches lo (fallback to max)
             target = next(
                 (
                     lvl
                     for lvl in self.levels
-                    if lvl and ambient + self.effect.get(lvl, 0.0) >= lo
+                    if lvl and (ambient + float(self.effect.get(lvl, 0.0)) >= lo)
                 ),
-                self.levels[-1] if self.levels else 0,  # Handle case with no levels
+                self.levels[-1] if self.levels else 0,
             )
             cmd = {"cmd": "ON", "level": int(target)}
 
+        else:
+            # inside deadband: keep previous decision
+            if self.last_cmd is None:
+                cmd = {"cmd": "OFF", "level": 0}
+            else:
+                cmd = {"cmd": self.last_cmd, "level": int(self.last_level or 0)}
+
+        # publish only on change
         if cmd["cmd"] != self.last_cmd or cmd["level"] != self.last_level:
-            self.last_cmd, self.last_level = cmd["cmd"], cmd["level"]
+            self.last_cmd, self.last_level = cmd["cmd"], int(cmd["level"])
             return cmd
+
         return None
-
-
