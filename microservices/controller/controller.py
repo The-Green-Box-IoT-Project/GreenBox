@@ -41,14 +41,18 @@ class Controller:
         # Cache per le istanze degli ottimizzatori, indicizzate per (greenhouse_id, raspberry_id)
         self.optimizer_cache: Dict[Tuple[str, str], ZoneOptimizers] = {}
 
+        # Mappa (gh_id, rb_id) -> zone_id (per invalidare la cache su eventi strategy)
+        self.device_zone_map: Dict[Tuple[str, str], str] = {}
+
         # Mappa per tenere traccia dello stato degli attuatori per zona (per evitare comandi ridondanti)
         self.last_actuator_commands: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
     def start(self):
-        # Il controller si iscrive ora ai topic di snapshot per ogni zona
         self.mqtt.start()
         # Topic: /{greenhouse_id}/{raspberry_id}/statistics/state
         self.mqtt.MySubscribe("/+/+/statistics/state")
+        # Topic per aggiornamenti di strategia (per invalidare la cache)
+        self.mqtt.MySubscribe("/zones/+/strategy/updated")
 
     def stop(self):
         self.mqtt.stop()
@@ -79,7 +83,7 @@ class Controller:
         effects = pd.read_csv("./effects/effects.csv")
 
         # Converte il formato delle soglie e gestisce la configurazione della luce
-        thresholds = {}
+        thresholds: Dict[str, Threshold] = {}
         light_enabled = False
         light_start_hour = 0
         light_end_hour = 0
@@ -121,7 +125,11 @@ class Controller:
             light_start_hour=light_start_hour,
             light_end_hour=light_end_hour,
         )
+
         self.optimizer_cache[zone_key] = new_optimizers
+        # IMPORTANT: salva mapping (gh_id, rb_id) -> zone_id per invalidazione cache su eventi strategy
+        self.device_zone_map[zone_key] = zone_id
+
         print(
             f"[{self.clientID}] Successfully created optimizer instance for zone '{gh_id}/{rb_id}'."
         )
@@ -134,7 +142,39 @@ class Controller:
         Si aspetta un payload JSON completo per una specifica zona.
         """
         try:
-            data = json.loads(payload)
+            payload_str = (
+                payload.decode("utf-8", errors="ignore")
+                if isinstance(payload, (bytes, bytearray))
+                else str(payload)
+            )
+            data = json.loads(payload_str)
+
+            # --- Eventi strategy update (da mongo-adapter) ---
+            if topic.startswith("/zones/") and topic.endswith("/strategy/updated"):
+                zone_id = data.get("zone_id")
+                if not zone_id:
+                    print(
+                        f"WARNING: [{self.clientID}] Missing 'zone_id' in payload from topic {topic}."
+                    )
+                    return
+
+                # invalida tutte le zone_key che puntano a quel zone_id
+                keys = [k for k, z in self.device_zone_map.items() if z == zone_id]
+                if not keys:
+                    print(
+                        f"DEBUG: [{self.clientID}] Strategy update for {zone_id}, but no cached device matched."
+                    )
+                    return
+
+                for k in keys:
+                    self.optimizer_cache.pop(k, None)
+                    self.last_actuator_commands.pop(k, None)
+                    self.device_zone_map.pop(k, None)
+
+                print(
+                    f"[{self.clientID}] Strategy updated for {zone_id} -> invalidated {len(keys)} optimizer(s)."
+                )
+                return
 
             gh_id = data.get("greenhouse_id")
             rb_id = data.get("raspberry_id")
@@ -147,10 +187,25 @@ class Controller:
 
             optimizers = self._get_or_create_optimizers(gh_id, rb_id)
             metrics_payload = data.get("metrics", {})
+
+            # normalizza humidity/soil_humidity da % (0..100) a frazione (0..1) se necessario
+            for m in ("humidity", "soil_humidity"):
+                md = metrics_payload.get(m)
+                if isinstance(md, dict) and "median" in md:
+                    try:
+                        v = float(md["median"])
+                        if v > 1.0:
+                            v = v / 100.0
+                        if v < 0.0:
+                            v = 0.0
+                        elif v > 1.0:
+                            v = 1.0
+                        md["median"] = round(v, 3)
+                    except (ValueError, TypeError):
+                        pass
+
             zone_key = (gh_id, rb_id)
-            current_actuator_state = self.last_actuator_commands.get(
-                zone_key, {}
-            )  # Recupera l'ultimo stato noto
+            current_actuator_state = self.last_actuator_commands.get(zone_key, {})
 
             # --- Gestione Ottimizzatore Principale ---
             res_main = optimizers.main.decide(

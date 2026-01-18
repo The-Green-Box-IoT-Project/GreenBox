@@ -12,6 +12,9 @@ services:
     volumes:
       - mongo-data:/data/db
       - ./init:/docker-entrypoint-initdb.d:ro
+    command: ["mongod","--bind_ip_all"]
+    networks:
+      - influx_caronte
 
   mongo-adapter:
     build: ./
@@ -20,10 +23,20 @@ services:
     environment:
       MONGO_URI: "mongodb://root:rootpassword@mongo:27017/"
       MONGO_DB: "greenbox"
+      BROKER_IP: "mosquitto"
+      BROKER_PORT: "1883"
+      ENABLE_STRATEGY_NOTIFIER: "1"
+      STRATEGY_POLL_S: "1.0"
     ports:
       - "8182:8082"
     depends_on:
-      - mongo   
+      - mongo  
+    networks:
+      - influx_caronte 
 
 volumes:
   mongo-data:
+
+networks:
+  influx_caronte:
+    external: true

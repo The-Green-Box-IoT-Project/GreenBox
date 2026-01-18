@@ -1,9 +1,12 @@
+import os
 import json
-import time
 import logging
 import threading
 from typing import Dict
 from pprint import pformat
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from devices.utils.mqtt import MyMQTT
 from devices.utils.client import get_effects_config
@@ -47,6 +50,13 @@ class Actuator:
             for _, r in actuator_effects_df.iterrows()
         }
 
+        # Keep the list of "effect" fields to always publish delta_* (also when OFF)
+        self.effect_fields = [
+            c
+            for c in actuator_effects_df.columns
+            if c not in ("system", "level", "energy_consumption", "water_consumption")
+        ]
+
         # Build zone-specific topics
         self.CMD_TOPIC = f"/{self.gh_id}/{self.rb_id}/actuators/{self.system}/cmd"
         self.DATA_TOPIC = (
@@ -63,26 +73,53 @@ class Actuator:
 
         # Status
         self.level = 0
-        self.publish_period_s = 5.0
+        self.publish_period_s = float(os.getenv("TIME_INTERVAL_SENSORS", "5"))
         self._is_on = False
-        self._on_epoch = None
         self._stop_event = threading.Event()
         self._pub_thread = None
         self._lock = threading.Lock()
 
-    def apply(self, level: int, elapsed_time: float) -> Dict[str, float]:
-        """Calculates the simulated cumulative effect of the actuator since it was turned on."""
+    def apply(self, level: int, dt: float, is_on: bool) -> Dict[str, float]:
+        """
+        Calculates the simulated *per-step* effect of the actuator for the next interval dt.
+        For light, the effect is a constant output (not multiplied by dt).
+        Always emits delta_* keys (0.0 when OFF) to avoid stale deltas on sensors.
+        """
         key = f"{level}%"
         eff = self.by_level.get(key, self.by_level.get(str(level), {}))
-        out = {}
-        for k, v in eff.items():
-            if k in ("energy_consumption", "water_consumption"):
-                out[k] = v
-            elif k == "light":
-                # For light, the effect is a constant output, not cumulative over time.
-                out[f"delta_{k}"] = v  # Not multiplied by elapsed_time
+
+        out: Dict[str, float] = {}
+
+        # energy/water are published as configured (kept simple)
+        try:
+            out["energy_consumption"] = float(eff.get("energy_consumption", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            out["energy_consumption"] = 0.0
+
+        try:
+            out["water_consumption"] = float(eff.get("water_consumption", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            out["water_consumption"] = 0.0
+
+        # If OFF or level=0, publish deltas as 0.0
+        if not is_on or level <= 0:
+            for k in self.effect_fields:
+                out[f"delta_{k}"] = 0.0
+            return out
+
+        # ON: compute per-step deltas
+        for k in self.effect_fields:
+            v = eff.get(k, 0.0)
+            try:
+                v = float(v or 0.0)
+            except (TypeError, ValueError):
+                v = 0.0
+
+            if k == "light":
+                out[f"delta_{k}"] = v
             else:
-                out[f"delta_{k}"] = v * elapsed_time  # Multiplied by elapsed_time
+                out[f"delta_{k}"] = v * float(dt)
+
         return out
 
     def set_level(self, level: int):
@@ -157,42 +194,39 @@ class Actuator:
                 prev = self.level
                 self.set_level(level)
                 if self._is_on and self.level != prev:
-                    self._on_epoch = time.time()
                     logging.info(f"[{self.device_id}] Level changed to {self.level}%.")
                     return
             if self._is_on:
                 return
 
             self._is_on = True
-            self._on_epoch = time.time()
             logging.info(f"[{self.device_id}] State: ON (level={self.level}%).")
 
     def turn_off(self):
         with self._lock:
             self._is_on = False
-            self._on_epoch = None
             self.set_level(0)
         logging.info(f"[{self.device_id}] State: OFF.")
 
     def _publisher_loop(self):
         """Periodic data publishing loop."""
         while not self._stop_event.is_set():
-            now = time.time()
             with self._lock:
-                elapsed = (
-                    int(now - self._on_epoch) if (self._is_on and self._on_epoch) else 0
-                )
                 lvl = self.level
-            effects = self.apply(lvl, float(elapsed))  # Pass elapsed as float
+                is_on = self._is_on and lvl > 0
+
+            effects = self.apply(lvl, self.publish_period_s, is_on)
+
             payload = {
                 "id": self.device_id,
-                "seconds_since_on": elapsed,
                 "system": self.system,
                 "level": lvl,
             } | effects
-            # Ensure water_consumption is always present, defaulting to 0.0 if not provided by effects
+
+            # Ensure keys always present
             payload.setdefault("water_consumption", 0.0)
             payload.setdefault("energy_consumption", 0.0)
+
             try:
                 self.mqtt.MyPublish(self.DATA_TOPIC, payload)
             except Exception as e:

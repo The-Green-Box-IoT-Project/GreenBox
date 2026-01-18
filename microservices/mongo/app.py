@@ -1,6 +1,7 @@
-# app.py
+import os
 import cherrypy
 from adapter import MongoDBAdapter, NotFound, Forbidden, Conflict
+from notifier import Notifier
 
 
 def handle_adapter_errors(func):
@@ -250,6 +251,10 @@ class StrategyService:
 
 
 if __name__ == "__main__":
+    if os.environ.get("ENABLE_STRATEGY_NOTIFIER", "1") == "1":
+        notifier = Notifier()
+        notifier.start()
+
     cherrypy.config.update(
         {
             "server.socket_host": "0.0.0.0",

@@ -1,0 +1,7 @@
+effect,unit,description
+energy_consumption,W/m³ = J/s·m³,Energy consumption rate (assumed normalized per greenhouse volume)
+water_consumption,g/s·m³,Water consumption rate (assumed normalized per greenhouse volume)
+temperature,°C/s,Actuator effect rate used by optimizer (temperature in °C)
+humidity,1/s (fraction),Optimizer effect rate on relative humidity expressed as fraction (0..1) per second (= %/s divided by 100)
+soil_humidity,1/s (fraction),Optimizer effect rate on soil humidity expressed as fraction (0..1) per second (= %/s divided by 100)
+light,lux,Light contribution used by LightOptimizer (treated as lux-like units)

@@ -1,7 +1,7 @@
 effect,unit,description
 energy_consumption,W/m³ = J/s·m³,Energy consumption rate
 water_consumption,g/s·m³,Water consumption rate
-temperature,K/s,Rate of change of air temperature
-humidity,%/s,Rate of change of relative humidity
-light,PAR,Light intensity (PAR)
-soil_humidity,/s,Rate of change of soil humidity
+temperature,°C/s,Actuator effect rate applied to sensor readings (temperature in °C)
+humidity,%/s,Actuator effect rate applied to sensor readings (humidity published in % 0..100)
+soil_humidity,%/s,Actuator effect rate applied to sensor readings (soil humidity published in % 0..100)
+light,lux,Light contribution applied to sensor readings (keep consistent with sensor/unit)

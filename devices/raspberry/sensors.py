@@ -15,11 +15,13 @@ class Sensor:
 
         # Load sensor attribute
         self.device_id = config_dict["id"]
-        self.measurements = config_dict["measurements"]  # List of measurement keys
+        self.measurements = config_dict[
+            "measurements"
+        ]  # List of measurement keys OR dicts
         self.units = config_dict[
             "units"
         ]  # Dict of measurement units (key is measurement)
-        self.time_interval = float(os.getenv("TIME_INTERVAL_SENSORS"))
+        self.time_interval = float(os.getenv("TIME_INTERVAL_SENSORS", "5"))
 
         self.mqtt = MyMQTT(
             clientID=self.device_id, broker=broker_ip, port=broker_port, notifier=None
@@ -134,22 +136,20 @@ class SensorSim(Sensor):
         Called by MyMQTT when a message arrives at subscribed actuator topics.
         Store the *latest* delta_<field> per actuator.
         Topic format: /<gh>/<rb>/actuators/<system>/<id>/data
-        Expects payload like:
-        {
-          "id": "...",
-          "delta_temperature": -0.0415,
-          "delta_humidity": -0.4165,
-          ...
-        }
         """
         try:
-            data = json.loads(
-                payload.decode() if isinstance(payload, (bytes, bytearray)) else payload
+            payload_str = (
+                payload.decode("utf-8", errors="ignore")
+                if isinstance(payload, (bytes, bytearray))
+                else str(payload)
             )
+            data = json.loads(payload_str)
+            if not isinstance(data, dict):
+                return
         except Exception:
             return
 
-            # Extract actuator_id from topic
+        # Extract actuator_id from topic
         parts = topic.strip("/").split("/")
         try:
             i = parts.index("actuators")
@@ -174,7 +174,6 @@ class SensorSim(Sensor):
 
     def stop(self):
         try:
-            # Correct: no argument
             self.mqtt.MyUnsubscribe()
         except Exception as e:
             logging.debug("[%s] Unsubscribe skipped: %s", self.device_id, e)
@@ -185,6 +184,8 @@ class SensorSim(Sensor):
         Apply the sum of the *latest* deltas per actuator (if any) to the value being published.
         Deltas are NOT cleared: they represent actuators' current state.
         """
+        eps = 1e-12
+
         # Compute per-field totals and contributors (actuator ids)
         with self._lock:
             totals = {}
@@ -195,11 +196,22 @@ class SensorSim(Sensor):
                         dv = float(dv)
                     except (TypeError, ValueError):
                         continue
+                    if abs(dv) < eps:
+                        continue
                     totals[field] = totals.get(field, 0.0) + dv
                     contrib_ids.setdefault(field, []).append(act_id)
 
         if not totals:
             return value
+
+        def _clamp_field(field: str, x: float) -> float:
+            # Sensori pubblicano in %: clamp per evitare valori non fisici
+            if field in ("humidity", "soil_humidity"):
+                if x < 0.0:
+                    return 0.0
+                if x > 100.0:
+                    return 100.0
+            return x
 
         # Dict case
         if isinstance(value, dict):
@@ -209,7 +221,7 @@ class SensorSim(Sensor):
                 if field in out:
                     try:
                         base = float(out[field])
-                        new_val = base + float(delta_sum)
+                        new_val = _clamp_field(field, base + float(delta_sum))
                         out[field] = new_val
                         applied[field] = {
                             "base": round(base, 4),
@@ -236,7 +248,7 @@ class SensorSim(Sensor):
             if delta_sum is not None:
                 try:
                     base = float(value)
-                    new_val = base + float(delta_sum)
+                    new_val = _clamp_field(field, base + float(delta_sum))
                     ids = sorted(set(contrib_ids.get(field, [])))
                     logging.info(
                         "[%s] Applied latest-per-actuator delta on %s: base=%.4f, new=%.4f, "
@@ -264,10 +276,15 @@ class SensorSim(Sensor):
         self.loop(self._fake_read)
 
     def _fake_read(self):
-        if len(self.measurements) == 1:
-            m = self.measurements[0]
-            return SimulateRealTimeReading(m).read()
+        # Support measurements as either strings or dicts with {"field": "..."}
+        fields = [
+            (m.get("field") if isinstance(m, dict) else str(m))
+            for m in self.measurements
+        ]
 
-        sensors = [m for m in self.measurements if m != "light_natural"]
-        readings = {m: SimulateRealTimeReading(m).read() for m in sensors}
+        if len(fields) == 1:
+            return SimulateRealTimeReading(fields[0]).read()
+
+        sensors = [f for f in fields if f != "light_natural"]
+        readings = {f: SimulateRealTimeReading(f).read() for f in sensors}
         return readings

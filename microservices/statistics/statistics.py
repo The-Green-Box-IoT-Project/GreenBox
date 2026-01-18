@@ -21,11 +21,18 @@ class StateAggregator:
         self.broker_port = int(os.environ.get("BROKER_PORT"))
 
         # MQTT client for publishing
-        self.mqtt = MyMQTT(clientID="statistics_aggregator", broker=self.broker_ip, port=self.broker_port, notifier=None)
+        self.mqtt = MyMQTT(
+            clientID="statistics_aggregator",
+            broker=self.broker_ip,
+            port=self.broker_port,
+            notifier=None,
+        )
 
         # Timing configuration from environment variables
         self.window_minutes = int(os.environ.get("STATS_WINDOW_MINUTES", "5"))
-        self.aggregation_interval_s = int(os.environ.get("STATS_AGGREGATION_INTERVAL_S", "10"))
+        self.aggregation_interval_s = int(
+            os.environ.get("STATS_AGGREGATION_INTERVAL_S", "10")
+        )
 
         # Threading control
         self._stop_event = threading.Event()
@@ -37,7 +44,9 @@ class StateAggregator:
         self.mqtt.start()
         self._thread = threading.Thread(target=self.run, daemon=True)
         self._thread.start()
-        print(f"StateAggregator started. Aggregation interval: {self.aggregation_interval_s} seconds.")
+        print(
+            f"StateAggregator started. Aggregation interval: {self.aggregation_interval_s} seconds."
+        )
 
     def stop(self):
         """Signal the aggregator loop to stop gracefully."""
@@ -52,19 +61,23 @@ class StateAggregator:
         """The main loop of the aggregator service."""
         while not self._stop_event.is_set():
             print("Starting aggregation cycle...")
-            
+
             start_time = time.time()
 
             # 1. Recupera la lista delle misurazioni (resiliente se il DB è giù)
             self.measurements = get_measurements()
-            
+
             # 2. Recupera le zone (resiliente)
             zones = get_all_stats_zones()
-            
+
             if not self.measurements:
-                print("[WARNING] Nessuna metrica definita o DB non raggiungibile. Salto il ciclo.")
+                print(
+                    "[WARNING] Nessuna metrica definita o DB non raggiungibile. Salto il ciclo."
+                )
             elif not zones:
-                print("[WARNING] Nessuna zona definita o DB non raggiungibile. Salto il ciclo.")
+                print(
+                    "[WARNING] Nessuna zona definita o DB non raggiungibile. Salto il ciclo."
+                )
             else:
                 print("Zones received: %s", zones)
                 for z in zones:
@@ -82,26 +95,29 @@ class StateAggregator:
     def _process_zone(self, gh_id: str, rb_id: str, measurements: List[str]):
         """Fetch, aggregate, and publish the state for a single zone."""
         print(f"[{gh_id}/{rb_id}] Processing zone...")
-        
-        aggregated_metrics = self._fetch_and_aggregate_metrics(gh_id, rb_id, measurements)
-        
+
+        aggregated_metrics = self._fetch_and_aggregate_metrics(
+            gh_id, rb_id, measurements
+        )
+
         if not aggregated_metrics:
             print(f"[{gh_id}/{rb_id}] No metrics to publish.")
             return
 
         self._publish_zone_state(gh_id, rb_id, aggregated_metrics)
 
-    def _fetch_and_aggregate_metrics(self, gh_id: str, rb_id: str, measurements: List[str]) -> Dict[str, Any]:
+    def _fetch_and_aggregate_metrics(
+        self, gh_id: str, rb_id: str, measurements: List[str]
+    ) -> Dict[str, Any]:
         """Query InfluxDB for all metrics and calculate the median for each."""
-        
+
         # Usa datetime.now(timezone.utc) è più moderno e sicuro di utcnow().replace
         end_ts = datetime.now(timezone.utc)
         start_ts = end_ts - timedelta(minutes=self.window_minutes)
-        
+
         metrics_data = {}
-        
+
         for metric in measurements:
-            # FIX 1: Forziamo la Z al posto di +00:00 per compatibilità con InfluxDB/Arrow
             start_str = start_ts.isoformat().replace("+00:00", "Z")
             end_str = end_ts.isoformat().replace("+00:00", "Z")
 
@@ -116,30 +132,42 @@ class StateAggregator:
                 continue
 
             try:
-                # FIX 2: I dati grezzi sono una lista di liste [[time, val], ...].
                 # Pandas assegna colonne 0 e 1 di default. Dobbiamo nominarle.
                 df = pd.DataFrame(data, columns=["time", "value"])
-                
+
                 if "value" in df and not df["value"].empty:
-                    median_value = float(df["value"].astype(float).median()) 
+                    median_value = float(df["value"].astype(float).median())
+                    # ma il controller/optimizer usano frazione (0..1). Normalizziamo solo se > 1.
+                    if metric in ("humidity", "soil_humidity"):
+                        if median_value > 1.0:
+                            median_value = median_value / 100.0
+                        # clamp di sicurezza per evitare valori fuori range
+                        if median_value < 0.0:
+                            median_value = 0.0
+                        elif median_value > 1.0:
+                            median_value = 1.0
+
                     metrics_data[metric] = {"median": round(median_value, 3)}
-                    
+
             except Exception as e:
-                # Ho aggiunto %s nell'interpolazione che mancava nel print originale se usi logging standard
-                print(f"[{gh_id}/{rb_id}] Failed to process data for metric '{metric}': {e}")
-        
+                print(
+                    f"[{gh_id}/{rb_id}] Failed to process data for metric '{metric}': {e}"
+                )
+
         return metrics_data
 
-    def _publish_zone_state(self, gh_id: str, rb_id: str, aggregated_metrics: Dict[str, Any]):
+    def _publish_zone_state(
+        self, gh_id: str, rb_id: str, aggregated_metrics: Dict[str, Any]
+    ):
         """Construct the full JSON payload and publish it to MQTT."""
         topic = f"/{gh_id}/{rb_id}/statistics/state"
-        
+
         payload = {
             "timestamp_utc": datetime.utcnow().replace(tzinfo=timezone.utc).isoformat(),
             "greenhouse_id": gh_id,
             "raspberry_id": rb_id,
-            "metrics": aggregated_metrics
+            "metrics": aggregated_metrics,
         }
-        
+
         self.mqtt.MyPublish(topic, payload)
         print(f"[{gh_id}/{rb_id}] Payload: {payload}")
