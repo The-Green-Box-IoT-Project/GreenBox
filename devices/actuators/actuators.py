@@ -188,25 +188,58 @@ class Actuator:
         except Exception as e:
             logging.error(f"[{self.device_id}] Error in notify: {e}", exc_info=True)
 
-    def _turn_on(self, level: int = None):
+    def _publish_now(self):
+        """
+        Publish immediately current actuator state (level + delta_*) so sensors stop using stale deltas.
+        """
         with self._lock:
-            if level is not None:
-                prev = self.level
-                self.set_level(level)
-                if self._is_on and self.level != prev:
-                    logging.info(f"[{self.device_id}] Level changed to {self.level}%.")
-                    return
-            if self._is_on:
-                return
+            lvl = self.level
+            is_on = self._is_on and lvl > 0
 
-            self._is_on = True
-            logging.info(f"[{self.device_id}] State: ON (level={self.level}%).")
+        effects = self.apply(lvl, self.publish_period_s, is_on)
+
+        payload = {
+            "id": self.device_id,
+            "system": self.system,
+            "level": lvl,
+        } | effects
+
+        payload.setdefault("water_consumption", 0.0)
+        payload.setdefault("energy_consumption", 0.0)
+
+        try:
+            self.mqtt.MyPublish(self.DATA_TOPIC, payload)
+        except Exception as e:
+            logging.warning(f"[{self.device_id}] Publish error: {e}")
+
+    def _turn_on(self, level: int):
+        publish_needed = False
+
+        with self._lock:
+            prev = self.level
+            self.set_level(level)
+
+            if self._is_on and self.level != prev:
+                logging.info(f"[{self.device_id}] Level changed to {self.level}%.")
+                publish_needed = True
+
+            elif not self._is_on:
+                self._is_on = True
+                logging.info(f"[{self.device_id}] State: ON (level={self.level}%).")
+                publish_needed = True
+
+        # Pubblica fuori dal lock per evitare deadlock (Lock non re-entrante)
+        if publish_needed:
+            self._publish_now()
 
     def turn_off(self):
         with self._lock:
             self._is_on = False
             self.set_level(0)
+
         logging.info(f"[{self.device_id}] State: OFF.")
+        # Pubblica fuori dal lock per evitare deadlock
+        self._publish_now()
 
     def _publisher_loop(self):
         """Periodic data publishing loop."""

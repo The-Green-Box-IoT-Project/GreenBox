@@ -67,13 +67,13 @@ class MyMQTT:
         self._c.subscribe(topic, qos=2)
         logging.info("[%s] Subscribed to %s", self._clientID, topic)
 
-    def MyPublish(self, topic, message):
+    def MyPublish(self, topic, message, retain=False):
         try:
             payload = json.dumps(message, default=str)
         except Exception:
             logging.exception("[%s] json.dumps failed", self._clientID)
             return None
-        info = self._c.publish(topic, payload, qos=2, retain=False) # Hardcoded to False
+        info = self._c.publish(topic, payload, qos=2, retain=retain)
         rc = getattr(info, "rc", 0)
         if rc == 0:
             logging.info("[%s] Published to %s: %s", self._clientID, topic, payload)

@@ -119,6 +119,10 @@ class SensorSim(Sensor):
 
     def __init__(self, config_dict, broker_ip, broker_port, base_topic):
         super().__init__(config_dict, broker_ip, broker_port, base_topic)
+        # Stato per dinamica cumulativa: per ogni field memorizziamo base precedente (x) e valore pubblicato precedente (z)
+        self._x_prev = {}
+        self._z_prev = {}
+
         # Replace MQTT client with one that calls back here
         self.mqtt = MyMQTT(
             clientID=self.device_id, broker=broker_ip, port=broker_port, notifier=self
@@ -181,8 +185,14 @@ class SensorSim(Sensor):
 
     def _apply_and_clear_deltas(self, value):
         """
-        Apply the sum of the *latest* deltas per actuator (if any) to the value being published.
-        Deltas are NOT cleared: they represent actuators' current state.
+        Applica i delta degli attuatori al valore generato dal simulatore.
+
+        - Per metriche cumulative (es. temperature, humidity, soil_humidity, pH):
+              z_i = z_{i-1} + (x_i - x_{i-1}) + u_i
+          dove x_i e' il valore "naturale" generato dal mock (value), u_i e' la somma dei delta correnti.
+
+        - Per la luce (istantanea):
+              z = x + u
         """
         eps = 1e-12
 
@@ -201,9 +211,6 @@ class SensorSim(Sensor):
                     totals[field] = totals.get(field, 0.0) + dv
                     contrib_ids.setdefault(field, []).append(act_id)
 
-        if not totals:
-            return value
-
         def _clamp_field(field: str, x: float) -> float:
             # Sensori pubblicano in %: clamp per evitare valori non fisici
             if field in ("humidity", "soil_humidity"):
@@ -213,28 +220,61 @@ class SensorSim(Sensor):
                     return 100.0
             return x
 
+        def _apply_one(field: str, base_x: float, delta_sum: float) -> float:
+            # Luce: istantanea, non cumulativa
+            if field == "light":
+                return _clamp_field(field, base_x + delta_sum)
+
+            # Prima osservazione: inizializziamo lo stato (se attuatori ON, ha senso partire gia' con x + delta)
+            if field not in self._x_prev or field not in self._z_prev:
+                z = _clamp_field(field, base_x + delta_sum)
+                self._x_prev[field] = base_x
+                self._z_prev[field] = z
+                return z
+
+            x_prev = float(self._x_prev[field])
+            z_prev = float(self._z_prev[field])
+
+            z = z_prev + (base_x - x_prev) + delta_sum
+            z = _clamp_field(field, z)
+
+            self._x_prev[field] = base_x
+            self._z_prev[field] = z
+            return z
+
         # Dict case
         if isinstance(value, dict):
             out = dict(value)
             applied = {}
-            for field, delta_sum in totals.items():
-                if field in out:
-                    try:
-                        base = float(out[field])
-                        new_val = _clamp_field(field, base + float(delta_sum))
-                        out[field] = new_val
-                        applied[field] = {
-                            "base": round(base, 4),
-                            "new": round(new_val, 4),
-                            "delta_sum": round(delta_sum, 4),
-                            "contributors": len(set(contrib_ids.get(field, []))),
-                            "actuators": sorted(set(contrib_ids.get(field, []))),
-                        }
-                    except (TypeError, ValueError):
-                        pass
+
+            for m in self.measurements:
+                field = m.get("field") if isinstance(m, dict) else str(m)
+                if field not in out:
+                    continue
+
+                try:
+                    base = float(out[field])
+                except (TypeError, ValueError):
+                    continue
+
+                delta_sum = float(totals.get(field, 0.0))
+                new_val = _apply_one(field, base, delta_sum)
+                out[field] = new_val
+
+                # Log solo se c'e' delta (o se vuoi estenderlo anche ai casi senza delta)
+                if abs(delta_sum) > eps:
+                    ids = sorted(set(contrib_ids.get(field, [])))
+                    applied[field] = {
+                        "base": round(base, 4),
+                        "new": round(new_val, 4),
+                        "delta_sum": round(delta_sum, 4),
+                        "contributors": len(ids),
+                        "actuators": ids,
+                    }
+
             if applied:
                 logging.info(
-                    "[%s] Applied latest-per-actuator deltas: %s",
+                    "[%s] Applied STATEFUL latest-per-actuator deltas: %s",
                     self.device_id,
                     applied,
                 )
@@ -244,26 +284,29 @@ class SensorSim(Sensor):
         if len(self.measurements) == 1:
             m = self.measurements[0]
             field = m.get("field") if isinstance(m, dict) else str(m)
-            delta_sum = totals.get(field)
-            if delta_sum is not None:
-                try:
-                    base = float(value)
-                    new_val = _clamp_field(field, base + float(delta_sum))
-                    ids = sorted(set(contrib_ids.get(field, [])))
-                    logging.info(
-                        "[%s] Applied latest-per-actuator delta on %s: base=%.4f, new=%.4f, "
-                        "delta_sum=%.4f, contributors=%d, actuators=%s",
-                        self.device_id,
-                        field,
-                        base,
-                        new_val,
-                        float(delta_sum),
-                        len(ids),
-                        ids,
-                    )
-                    return new_val
-                except (TypeError, ValueError):
-                    return value
+
+            try:
+                base = float(value)
+            except (TypeError, ValueError):
+                return value
+
+            delta_sum = float(totals.get(field, 0.0))
+            new_val = _apply_one(field, base, delta_sum)
+
+            if abs(delta_sum) > eps:
+                ids = sorted(set(contrib_ids.get(field, [])))
+                logging.info(
+                    "[%s] Applied STATEFUL delta on %s: base=%.4f, new=%.4f, "
+                    "delta_sum=%.4f, contributors=%d, actuators=%s",
+                    self.device_id,
+                    field,
+                    base,
+                    new_val,
+                    delta_sum,
+                    len(ids),
+                    ids,
+                )
+            return new_val
 
         return value
 

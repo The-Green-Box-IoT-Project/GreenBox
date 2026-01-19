@@ -6,10 +6,20 @@ import pandas as pd
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import hashlib
 
 load_dotenv()
 
 P = Path(__file__).resolve().parent
+
+
+def _stable_seed(s: str) -> int:
+    """
+    Seed deterministico e stabile cross-run.
+    Non usare hash() di Python (cambia tra processi).
+    """
+    digest = hashlib.blake2b(s.encode("utf-8"), digest_size=4).digest()
+    return int.from_bytes(digest, "little", signed=False)
 
 
 def datetime_range(granularity: timedelta, start_time, end_time) -> pd.DatetimeIndex:
@@ -207,12 +217,14 @@ class Measure:
             f"Simulate must be one of {available} (missing file: {path.name})"
         )
 
-    def generate(self, name: str, index: pd.DatetimeIndex) -> pd.Series:
+    def generate(
+        self, name: str, index: pd.DatetimeIndex, seed: int | None = None
+    ) -> pd.Series:
         """Compose base + seasonality (+ noise); for 'light' use daily*yearly."""
         base = pd.Series(self.base, index=index, dtype=float)
         d = DailySeasonality(self.daily_knots).evaluate(index)
         y = YearlySeasonality(self.yearly_knots).evaluate(index)
-        n = RedNoise(**self.noise).evaluate(index)
+        n = RedNoise(**self.noise, seed=seed).evaluate(index)
         s = base + (d * y if name == "light" else d + y) + n
         return s.clip(lower=0) if name == "light" else s
 
@@ -223,11 +235,37 @@ class SimulateRealTimeReading:
     def __init__(self, measurement_name: str):
         self.name = measurement_name
         self.measure = Measure.from_json(measurement_name)
+
+        # Cache giornaliera: generiamo la serie una sola volta per giorno.
         today = Today()
         self.index = datetime_range(timedelta(hours=1), today.start_day, today.end_day)
+        self._day = today.start_day.date()
+
+        base_seed = int(os.environ.get("SIM_SEED_BASE", "0"))
+        self._seed = (
+            base_seed + _stable_seed(f"{self.name}|{self._day.isoformat()}")
+        ) % (2**32)
+
+        self._series = self.measure.generate(self.name, self.index, seed=self._seed)
+
+    def _ensure_today(self):
+        # Se passa la mezzanotte, rigenera la cache.
+        today = Today()
+        d = today.start_day.date()
+        if d != self._day:
+            self._day = d
+            self.index = datetime_range(
+                timedelta(hours=1), today.start_day, today.end_day
+            )
+            base_seed = int(os.environ.get("SIM_SEED_BASE", "0"))
+            self._seed = (
+                base_seed + _stable_seed(f"{self.name}|{self._day.isoformat()}")
+            ) % (2**32)
+            self._series = self.measure.generate(self.name, self.index, seed=self._seed)
 
     def read(self) -> float:
-        s = self.measure.generate(self.name, self.index)
+        self._ensure_today()
+        s = self._series
         t0 = get_latest_entry_before_now(s) or self.index[0]  # fallback alle 00:00
         window = s.loc[t0 : t0 + timedelta(hours=1)].astype(float)
         resampled = window.resample("1s").interpolate("linear").round(2)

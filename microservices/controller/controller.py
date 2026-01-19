@@ -44,8 +44,12 @@ class Controller:
         # Mappa (gh_id, rb_id) -> zone_id (per invalidare la cache su eventi strategy)
         self.device_zone_map: Dict[Tuple[str, str], str] = {}
 
-        # Mappa per tenere traccia dello stato degli attuatori per zona (per evitare comandi ridondanti)
+        # Mappa per tenere traccia dello stato "desiderato" degli attuatori per zona (per evitare comandi ridondanti)
         self.last_actuator_commands: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+        # Cache dello stato "reale" degli attuatori, letta dai topic /.../actuators/<system>/<id>/data
+        # Chiave: (gh_id, rb_id, system) -> {"id": "...", "level": int, "payload": dict}
+        self.actuator_state_cache: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
 
     def start(self):
         self.mqtt.start()
@@ -53,6 +57,9 @@ class Controller:
         self.mqtt.MySubscribe("/+/+/statistics/state")
         # Topic per aggiornamenti di strategia (per invalidare la cache)
         self.mqtt.MySubscribe("/zones/+/strategy/updated")
+        # Topic per stato reale degli attuatori (data published dall'attuatore)
+        # es: /GH_001/RB_001/actuators/illumination_system/LIGHT_001/data
+        self.mqtt.MySubscribe("/+/+/actuators/+/+/data")
 
     def stop(self):
         self.mqtt.stop()
@@ -138,8 +145,10 @@ class Controller:
 
     def notify(self, topic: str, payload: str):
         """
-        Gestisce i messaggi MQTT di stato aggregato per zona.
-        Si aspetta un payload JSON completo per una specifica zona.
+        Gestisce i messaggi MQTT:
+        - /+/+/statistics/state
+        - /zones/+/strategy/updated
+        - /+/+/actuators/+/+/data  (stato reale attuatori)
         """
         try:
             payload_str = (
@@ -148,6 +157,28 @@ class Controller:
                 else str(payload)
             )
             data = json.loads(payload_str)
+
+            # --- Eventi actuator data: aggiorna cache stato reale e stop ---
+            # Topic atteso: /{gh}/{rb}/actuators/{system}/{id}/data
+            if "/actuators/" in topic and topic.endswith("/data"):
+                parts = topic.strip("/").split("/")
+                if len(parts) >= 6 and parts[2] == "actuators" and parts[-1] == "data":
+                    gh_id = parts[0]
+                    rb_id = parts[1]
+                    system = parts[3]
+                    act_id = parts[4]
+
+                    try:
+                        level = int(data.get("level", 0) or 0)
+                    except (ValueError, TypeError):
+                        level = 0
+
+                    self.actuator_state_cache[(gh_id, rb_id, system)] = {
+                        "id": act_id,
+                        "level": level,
+                        "payload": data,
+                    }
+                return
 
             # --- Eventi strategy update (da mongo-adapter) ---
             if topic.startswith("/zones/") and topic.endswith("/strategy/updated"):
@@ -176,6 +207,7 @@ class Controller:
                 )
                 return
 
+            # --- Eventi statistics/state ---
             gh_id = data.get("greenhouse_id")
             rb_id = data.get("raspberry_id")
 
@@ -230,15 +262,16 @@ class Controller:
 
                         cmd_topic = f"/{gh_id}/{rb_id}/actuators/{sys}/cmd"
                         msg = {"cmd": "ON" if lvl > 0 else "OFF", "level": lvl}
-                        self.mqtt.MyPublish(cmd_topic, msg)
+                        self.mqtt.MyPublish(cmd_topic, msg, retain=True)
                 else:
                     print(
                         f"DEBUG: [{self.clientID}] Zone {gh_id}/{rb_id} - Main optimizer actions unchanged."
                     )
 
-            # --- Gestione Ottimizzatore Luce ---
+            # --- Gestione Ottimizzatore Luce (P4: usa stato reale LED dal topic /data) ---
             if optimizers.light_enabled:
                 current_hour = datetime.datetime.now(LOCAL_TZ).hour
+
                 if (
                     optimizers.light_start_hour
                     <= current_hour
@@ -251,16 +284,56 @@ class Controller:
                         and "median" in light_data
                     ):
                         try:
-                            res_light = optimizers.light.decide(
-                                float(light_data["median"])
+                            total_lux = float(
+                                light_data["median"]
+                            )  # z = naturale + artificiale
+
+                            # Legge livello reale dal cache aggiornato dai /actuators/.../data
+                            led_state = self.actuator_state_cache.get(
+                                (gh_id, rb_id, "illumination_system")
                             )
+                            if led_state:
+                                led_level = int(led_state.get("level", 0) or 0)
+                            else:
+                                led_level = 0
+
+                            # Ricostruisce ambient x sottraendo l'effetto artificiale del livello reale
+                            if led_level > 0:
+                                artificial = float(
+                                    optimizers.light.effect.get(led_level, 0.0)
+                                )
+                                ambient = total_lux - artificial
+                                if ambient < 0.0:
+                                    ambient = 0.0
+                            else:
+                                ambient = total_lux
+
+                            res_light = optimizers.light.decide(ambient)
                             if res_light:
                                 cmd_topic = f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
-                                self.mqtt.MyPublish(cmd_topic, res_light)
+                                self.mqtt.MyPublish(cmd_topic, res_light, retain=True)
+
                         except (ValueError, TypeError):
                             print(
                                 f"WARNING: [{self.clientID}] Zone {gh_id}/{rb_id} - Non-numeric median value for total light: {light_data}"
                             )
+                else:
+                    # Fuori fascia: forza OFF retained
+                    cmd_topic = f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
+                    self.mqtt.MyPublish(
+                        cmd_topic, {"cmd": "OFF", "level": 0}, retain=True
+                    )
+
+                    # Allinea anche lo stato interno del LightOptimizer
+                    optimizers.light.last_cmd = "OFF"
+                    optimizers.light.last_level = 0
+            else:
+                # Strategia luce disabilitata: forza OFF retained
+                cmd_topic = f"/{gh_id}/{rb_id}/actuators/illumination_system/cmd"
+                self.mqtt.MyPublish(cmd_topic, {"cmd": "OFF", "level": 0}, retain=True)
+
+                optimizers.light.last_cmd = "OFF"
+                optimizers.light.last_level = 0
 
         except Exception as e:
             print(

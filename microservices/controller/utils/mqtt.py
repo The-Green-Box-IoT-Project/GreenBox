@@ -28,7 +28,12 @@ class MyMQTT:
     # --- callbacks ---
 
     def _on_connect(self, client, userdata, flags, rc):
-        msg = "[%s] Connected to %s:%s (rc=%s)" % (self._clientID, self.broker, self.port, rc)
+        msg = "[%s] Connected to %s:%s (rc=%s)" % (
+            self._clientID,
+            self.broker,
+            self.port,
+            rc,
+        )
         print(msg)
         if rc == 0 and self._connected_once and self._topic:
             self._c.subscribe(self._topic, qos=2)
@@ -65,14 +70,14 @@ class MyMQTT:
         msg = "[%s] Subscribed to %s" % (self._clientID, topic)
         print(msg)
 
-    def MyPublish(self, topic, message):
+    def MyPublish(self, topic, message, retain=False):
         try:
             payload = json.dumps(message, default=str)
         except Exception:
             msg = "[%s] json.dumps failed" % (self._clientID)
             print(msg)
             return None
-        info = self._c.publish(topic, payload, qos=2, retain=False) # Hardcoded to False
+        info = self._c.publish(topic, payload, qos=2, retain=retain)
         rc = getattr(info, "rc", 0)
         if rc == 0:
             msg = "[%s] Published to %s: %s" % (self._clientID, topic, payload)
@@ -98,7 +103,7 @@ class MyMQTT:
             self._c.loop_stop()
         except Exception:
             msg = "[%s] loop_stop error" % (self._clientID)
-            print(msg)  
+            print(msg)
         try:
             self._c.disconnect()
         except Exception:
