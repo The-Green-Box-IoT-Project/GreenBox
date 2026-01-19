@@ -1,19 +1,21 @@
 #!/bin/bash
 
-# Interrompe lo script se un comando fallisce
-set -e
-
+# Influx
 cd ./microservices/influx
 docker compose up -d --build
 
+# Mongo
 cd ../../microservices/mongo
 docker compose up -d --build
 
-cd ../../microservices/catalog
+# Statistics
+cd ../../microservices/statistics
 docker compose up -d --build
 
+# Control strategies
 cd ../../microservices/controller
 docker compose up -d --build
 
-cd ../../microservices/statistics
+# Catalog
+cd ../../microservices/catalog
 docker compose up -d --build

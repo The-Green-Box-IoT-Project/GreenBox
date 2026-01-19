@@ -8,11 +8,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     networks:
-      - mongo_default
       - influx_caronte
 
 networks:
-  mongo_default:
-    external: true
   influx_caronte:
-    external: true  
+    external: true
