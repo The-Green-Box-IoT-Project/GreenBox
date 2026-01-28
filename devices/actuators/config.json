@@ -24,6 +24,21 @@
           ]
         }
       ]
+    },
+    {
+      "id": "GH_002",
+      "raspberries": [
+        {
+          "id": "RB_003",
+          "actuators": [
+            { "id": "VENT_003", "type": "ventilation_system" },
+            { "id": "HEAT_003", "type": "heating_system" },
+            { "id": "LIGHT_003", "type": "illumination_system" },
+            { "id": "HUM_003", "type": "humidification_system" },
+            { "id": "IRRIG_003", "type": "irrigation_system" }
+          ]
+        }
+      ]
     }
   ]
 }

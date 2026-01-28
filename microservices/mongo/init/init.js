@@ -21,8 +21,8 @@ db.createCollection("users");
 db.users.createIndex({ username: 1 }, { unique: true });
 
 db.users.insertOne({
-  username: "senpai",
-  password: "iot",
+  username: "Greenuser",
+  password: "Password00",
   greenhouses: ["GH_001"]
 });
 
@@ -36,7 +36,7 @@ db.greenhouses.createIndex({ greenhouse_id: 1 }, { unique: true });
 
 db.greenhouses.insertOne({
   greenhouse_id: "GH_001",
-  name: "Serra dei Senpais",
+  name: "Terrace",
   zones: ["ZONE_001", "ZONE_002"]
 });
 
