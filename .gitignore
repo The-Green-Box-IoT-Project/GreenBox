@@ -20,3 +20,5 @@ venv
 .venv
 *.bat
 /Control_Strategies/crop_profiles.json
+big-compose.bat
+big-compose.sh
