@@ -1,9 +1,11 @@
 # GreenBox
 **IoT Software Ecosystem for Smart Greenhouse Management**
 
-GreenBox is a comprehensive, microservices-based IoT platform designed to automate and optimize the climate control of smart greenhouses. It integrates real-time monitoring, intelligent control strategies, and resource management into a scalable architecture.
+GreenBox is a comprehensive, **microservices**-based **IoT platform** designed to automate and optimize the climate control of smart greenhouses. It integrates real-time monitoring, intelligent control strategies, and resource management into a scalable architecture.
 
-![Flowchart](./flowchart.png)
+The user interface is a **React Native** mobile application that allows real-time monitoring of greenhouse states, strategy management, and user profile control. The source code is available in the [GreenBoxApp repository](https://github.com/The-Green-Box-IoT-Project/GreenBoxApp).
+
+![Flowchart](./documentation/flowchart.png)
 
 ## 🏗 Architecture Overview
 
